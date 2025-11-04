@@ -1,0 +1,22 @@
+// Simplified test version - backup of current code
+// If needed, we can test with this minimal version
+
+import { RealtimeAgent } from '@openai/agents/realtime';
+
+export const dentalReceptionistAgentSimple = new RealtimeAgent({
+  name: 'dentalTest',
+  voice: 'sage',
+  instructions: `You are a dental office receptionist. Say "Hello from Bright Smile Dental!"`,
+  tools: [], // No tools - just test if agent loads
+});
+
+export const openDentalScenarioSimple = [dentalReceptionistAgentSimple];
+
+
+
+
+
+
+
+
+

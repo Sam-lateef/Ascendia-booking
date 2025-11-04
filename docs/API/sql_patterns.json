@@ -1,0 +1,230 @@
+{
+  "metadata": {
+    "source": "shortQuery.txt",
+    "extracted_at": "2025-10-29",
+    "description": "Production SQL patterns from OpenDental API implementation",
+    "total_patterns": 8
+  },
+  "sql_patterns": {
+    "patient_search_multi_phone": {
+      "description": "Search patient by phone across 3 columns (HmPhone, WkPhone, WirelessPhone)",
+      "sql_template": "WHERE (HmPhone='${phone}' OR WkPhone='${phone}' OR WirelessPhone='${phone}')",
+      "workflow_rule": "Phone searches MUST check all 3 phone columns. GetMultiplePatients handles this automatically.",
+      "api_function": "GetMultiplePatients",
+      "parameters": {
+        "Phone": "Cleaned 10-digit phone number"
+      },
+      "example": "GetMultiplePatients(Phone: '6195551234')"
+    },
+    
+    "patient_search_by_name": {
+      "description": "Search patient by first and/or last name",
+      "sql_template": "WHERE FName='${firstname}' AND LName='${lastname}'",
+      "workflow_rule": "Name searches should use LName (required) + FName (optional). Case-sensitive in some DBs.",
+      "api_function": "GetMultiplePatients",
+      "parameters": {
+        "LName": "Last name (required)",
+        "FName": "First name (optional)"
+      },
+      "example": "GetMultiplePatients(LName: 'Smith', FName: 'John')"
+    },
+    
+    "check_occupied_slots": {
+      "description": "Find occupied appointment slots in date range",
+      "sql_template": "SELECT AptDateTime FROM appointment INNER JOIN patient ON patient.PatNum = appointment.PatNum WHERE AptDateTime BETWEEN '${startDate}' AND '${endDate}'",
+      "workflow_rule": "Availability = Find OCCUPIED slots first, then suggest times NOT in that list. Always use date range, not single date.",
+      "api_function": "GetAppointments",
+      "parameters": {
+        "DateStart": "Start date in YYYY-MM-DD format",
+        "DateEnd": "End date in YYYY-MM-DD format"
+      },
+      "example": "GetAppointments(DateStart: '2025-10-30', DateEnd: '2025-11-06')",
+      "conflict_detection": true
+    },
+    
+    "detect_scheduling_conflicts": {
+      "description": "Check for scheduling conflicts across patient, operatory, and provider",
+      "sql_template": "SELECT ap.AptDateTime, op.OperatoryNum, op.OpName FROM appointment ap INNER JOIN operatory op ON op.OperatoryNum = ap.Op INNER JOIN patient pt ON pt.PatNum = ap.PatNum WHERE ap.AptDateTime BETWEEN '${startDateTime}' AND '${endDateTime}'",
+      "workflow_rule": "Before booking, verify: (1) Patient has no conflicting appointment, (2) Operatory is free, (3) Provider is available. Check 30-minute window around requested time.",
+      "api_function": "GetAppointments",
+      "parameters": {
+        "DateStart": "Start datetime",
+        "DateEnd": "End datetime (start + appointment duration + buffer)"
+      },
+      "conflict_checks": [
+        "patient_conflict: Same PatNum at same time",
+        "operatory_conflict: Same Op at same time",
+        "provider_conflict: Same ProvNum at same time"
+      ],
+      "example": "Before CreateAppointment, call GetAppointments and check occupiedSlots array"
+    },
+    
+    "list_providers_with_specializations": {
+      "description": "Get providers/operatories with their specializations from definition table",
+      "sql_template": "SELECT o.ClinicNum, o.OpName AS OperatoryName, o.IsHygiene, d.ItemName AS Specialization FROM operatory o LEFT JOIN definition d ON o.OperatoryType = d.DefNum AND d.Category = 55 WHERE o.IsHidden <> 1",
+      "workflow_rule": "Operatories have types/specializations via definition.DefNum. Filter IsHidden <> 1 for active only. Hygiene ops for cleanings, general ops for procedures.",
+      "api_function": "GetOperatories",
+      "parameters": {},
+      "example": "GetOperatories() returns list with IsHygiene flag and OperatoryType",
+      "join_tables": ["operatory", "definition"],
+      "filter_criteria": {
+        "IsHidden": "Must be 0 or false (active operatories only)"
+      }
+    },
+    
+    "get_patient_appointments_list": {
+      "description": "Get all appointments for a patient by phone, name, or email",
+      "sql_template": "SELECT AptNum, patient.PatNum, AptDateTime FROM appointment INNER JOIN patient ON patient.PatNum = appointment.PatNum WHERE FName='${firstname}' AND LName='${lastname}' OR (HmPhone='${phone}' OR WkPhone='${phone}' OR WirelessPhone='${phone}')",
+      "workflow_rule": "To find patient appointments: (1) Lookup patient first with GetMultiplePatients, (2) Then GetAppointments with PatNum. Multi-column phone search required.",
+      "api_functions": ["GetMultiplePatients", "GetAppointments"],
+      "parameters": {
+        "step1": "GetMultiplePatients(Phone: '...' or LName: '...', FName: '...')",
+        "step2": "GetAppointments(PatNum: result.PatNum)"
+      },
+      "example": "GetMultiplePatients → GetAppointments(PatNum: 46)"
+    },
+    
+    "check_appointment_by_date": {
+      "description": "Find specific appointment by date/time range",
+      "sql_template": "SELECT AptNum, AptDateTime FROM appointment INNER JOIN patient ON patient.PatNum = appointment.PatNum WHERE AptDateTime BETWEEN '${dateTime}' AND '${dateTimePlus30}'",
+      "workflow_rule": "To find appointments by date, use 30-minute window: requested_time to requested_time + 30 minutes. Helps find appointments even if exact time unknown.",
+      "api_function": "GetAppointments",
+      "parameters": {
+        "DateStart": "Requested datetime",
+        "DateEnd": "Requested datetime + 30 minutes"
+      },
+      "example": "GetAppointments(DateStart: '2025-10-30 14:00:00', DateEnd: '2025-10-30 14:30:00')",
+      "time_window": "30 minutes"
+    },
+    
+    "get_patient_info_by_phone": {
+      "description": "Quick patient lookup by phone number only",
+      "sql_template": "SELECT PatNum, Salutation, LName, FName FROM patient WHERE HmPhone='${phone}' OR WkPhone='${phone}' OR WirelessPhone='${phone}'",
+      "workflow_rule": "Fastest patient lookup method. Use when caller provides phone number. Checks all 3 phone columns automatically.",
+      "api_function": "GetMultiplePatients",
+      "parameters": {
+        "Phone": "10-digit cleaned phone number"
+      },
+      "example": "GetMultiplePatients(Phone: '6195551234')",
+      "returns": ["PatNum", "FName", "LName", "Phone numbers"]
+    }
+  },
+  
+  "workflow_patterns": {
+    "booking_new_appointment": {
+      "description": "Complete workflow for booking a new appointment",
+      "steps": [
+        {
+          "step": 1,
+          "action": "Find patient",
+          "sql_pattern": "patient_search_multi_phone or patient_search_by_name",
+          "api_call": "GetMultiplePatients(Phone: '...' or LName: '...', FName: '...')",
+          "on_not_found": "Ask if they want to create new patient record"
+        },
+        {
+          "step": 2,
+          "action": "Check occupied slots",
+          "sql_pattern": "check_occupied_slots",
+          "api_call": "GetAppointments(DateStart: today, DateEnd: today+7days)",
+          "result": "occupiedSlots array"
+        },
+        {
+          "step": 3,
+          "action": "Detect conflicts",
+          "sql_pattern": "detect_scheduling_conflicts",
+          "check": "Verify requested time not in occupiedSlots",
+          "conflicts_to_check": ["patient", "operatory", "provider"]
+        },
+        {
+          "step": 4,
+          "action": "Book appointment",
+          "api_call": "CreateAppointment(PatNum, AptDateTime, Op, ProvNum, Note)",
+          "on_success": "Confirm to user with natural language"
+        }
+      ]
+    },
+    
+    "cancel_appointment": {
+      "description": "Complete workflow for canceling an appointment",
+      "steps": [
+        {
+          "step": 1,
+          "action": "Find patient",
+          "sql_pattern": "patient_search_multi_phone",
+          "api_call": "GetMultiplePatients(Phone: '...')"
+        },
+        {
+          "step": 2,
+          "action": "Find appointment",
+          "sql_pattern": "get_patient_appointments_list",
+          "api_call": "GetAppointments(PatNum: result.PatNum)",
+          "filter": "Find appointment matching date/time if specified"
+        },
+        {
+          "step": 3,
+          "action": "Cancel appointment",
+          "api_call": "BreakAppointment(AptNum) or DeleteAppointment(AptNum)",
+          "preference": "Use BreakAppointment first (keeps history), DeleteAppointment as fallback"
+        }
+      ]
+    },
+    
+    "check_availability": {
+      "description": "Smart availability checking with multiple fallback strategies",
+      "strategies": [
+        {
+          "strategy": "primary",
+          "name": "GetAvailableSlots API",
+          "sql_pattern": null,
+          "api_call": "GetAvailableSlots(dateStart, dateEnd, ProvNum, OpNum)",
+          "when": "If database has schedules configured",
+          "on_empty": "Fall back to strategy 2"
+        },
+        {
+          "strategy": "secondary",
+          "name": "Occupied Slots Analysis",
+          "sql_pattern": "check_occupied_slots",
+          "api_call": "GetAppointments(DateStart, DateEnd)",
+          "logic": "Get occupied slots, suggest times NOT in that list, within office hours",
+          "when": "If GetAvailableSlots returns empty",
+          "on_failure": "Fall back to strategy 3"
+        },
+        {
+          "strategy": "tertiary",
+          "name": "Reasonable Times",
+          "sql_pattern": null,
+          "api_call": null,
+          "logic": "Pick standard times (9am, 10am, 2pm, 3pm) based on user request, verify against occupied slots",
+          "when": "If GetAppointments also fails or returns too many results"
+        }
+      ]
+    }
+  },
+  
+  "best_practices": {
+    "phone_number_handling": {
+      "rule": "Always clean phone numbers to 10 digits before API calls",
+      "regex": "Remove: ()- .spaces",
+      "example": "(619) 555-1234 → 6195551234"
+    },
+    "date_time_format": {
+      "date": "YYYY-MM-DD (e.g., 2025-10-30)",
+      "datetime": "YYYY-MM-DD HH:MM:SS (e.g., 2025-10-30 14:00:00)",
+      "timezone": "Use local timezone, not UTC"
+    },
+    "conflict_detection_window": {
+      "rule": "Check 30-minute window around requested time",
+      "reason": "Accounts for appointment duration and buffer time",
+      "calculation": "requested_time to requested_time + 30 minutes"
+    },
+    "operatory_selection": {
+      "hygiene_procedures": ["Cleaning", "Exam", "X-rays"],
+      "general_procedures": ["Fillings", "Crowns", "Root Canal", "Extraction"],
+      "rule": "Match operatory type (IsHygiene) to procedure type"
+    }
+  }
+}
+
+
+
+

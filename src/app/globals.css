@@ -1,0 +1,142 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #1e1e1e;
+  --foreground: #cccccc;
+  --dark-1: #0d0d0d;
+  --dark-2: #1e1e1e;
+  --dark-3: #252525;
+  --dark-4: #2d2d2d;
+  --bright-green: #00ff41;
+  --dim-green: #00aa2e;
+  --text-gray: #cccccc;
+  --text-gray-dim: #999999;
+  --border-gray: #3e3e3e;
+  --warning-red: #f48771;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--dark-2);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+}
+
+/* Remove all rounded corners */
+* {
+  border-radius: 0 !important;
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--dark-1);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--dark-4);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-gray);
+}
+
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--dark-4) var(--dark-1);
+}
+
+/* Custom checkbox styling */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--border-gray);
+  background: var(--dark-3);
+  cursor: pointer;
+  position: relative;
+}
+
+input[type="checkbox"]:checked {
+  background: var(--dark-4);
+  border-color: var(--text-gray);
+}
+
+input[type="checkbox"]:checked::after {
+  content: "✓";
+  position: absolute;
+  color: var(--text-gray);
+  font-size: 14px;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  line-height: 1;
+}
+
+input[type="checkbox"]:hover {
+  border-color: var(--text-gray-dim);
+}
+
+input[type="checkbox"]:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Select dropdown styling */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+}
+
+select option {
+  background: var(--dark-2);
+  color: var(--text-gray);
+}
+
+/* Input placeholder styling */
+input::placeholder {
+  color: var(--text-gray-dim);
+  opacity: 0.7;
+}
+
+input::-webkit-input-placeholder {
+  color: var(--text-gray-dim);
+  opacity: 0.7;
+}
+
+input::-moz-placeholder {
+  color: var(--text-gray-dim);
+  opacity: 0.7;
+}
+
+@keyframes cursor-fade {
+  0%, 54% {
+    color: var(--bright-green);
+    opacity: 1;
+  }
+  69% {
+    color: var(--dark-4);
+    opacity: 0.3;
+  }
+  90% {
+    color: var(--dark-4);
+    opacity: 0.3;
+  }
+  100% {
+    color: var(--bright-green);
+    opacity: 1;
+  }
+}
+
+.cursor-animate {
+  animation: cursor-fade 4s ease-in-out infinite;
+}

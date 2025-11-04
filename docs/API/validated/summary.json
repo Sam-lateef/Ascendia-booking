@@ -1,0 +1,103 @@
+{
+  "generated_at": "2025-10-26T17:19:41.171Z",
+  "statistics": {
+    "total_endpoints": 337,
+    "duplicates_found": 20,
+    "parameter_issues": 24,
+    "tested_endpoints": 21,
+    "validated": 8,
+    "failed": 0,
+    "skipped": 13,
+    "auto_corrected": 0
+  },
+  "issues": {
+    "duplicates": [
+      "GetPatients",
+      "CreatePatient",
+      "UpdatePatient",
+      "DeletePatient",
+      "GetAgingData",
+      "QueryPatientBalances",
+      "GetAgingData",
+      "QueryPatientBalances",
+      "GetPatients",
+      "CreatePatient",
+      "UpdatePatient",
+      "DeletePatient",
+      "GetAgingData",
+      "GetASAPAppointments",
+      "CreateAppointment",
+      "UpdateAppointment",
+      "ConfirmAppointment",
+      "CreatePatient",
+      "UpdatePatient",
+      "CreateSubscription"
+    ],
+    "failed_validations": [],
+    "parameter_issues": [
+      {
+        "function_name": "GetMultipleAppointments",
+        "parameter": "date",
+        "suggested_correction": "AptDateTime",
+        "reason": "Parameter name does not match OpenDental API convention"
+      },
+      {
+        "function_name": "GetAvailableSlots",
+        "parameter": "date",
+        "suggested_correction": "AptDateTime",
+        "reason": "Parameter name does not match OpenDental API convention"
+      },
+      {
+        "function_name": "GetAppointments",
+        "parameter": "Date",
+        "suggested_correction": "AptDateTime",
+        "reason": "Parameter name does not match OpenDental API convention"
+      },
+      {
+        "function_name": "GetSingleAppointment",
+        "parameter": "AppointmentId",
+        "suggested_correction": "AptNum",
+        "reason": "Parameter name does not match OpenDental API convention"
+      },
+      {
+        "function_name": "GetAppointmentSlots",
+        "parameter": "Date",
+        "suggested_correction": "AptDateTime",
+        "reason": "Parameter name does not match OpenDental API convention"
+      },
+      {
+        "function_name": "CreateAppointment",
+        "parameter": "PatientId",
+        "suggested_correction": "PatNum",
+        "reason": "Parameter name does not match OpenDental API convention"
+      },
+      {
+        "function_name": "CreateAppointment",
+        "parameter": "Date",
+        "suggested_correction": "AptDateTime",
+        "reason": "Parameter name does not match OpenDental API convention"
+      },
+      {
+        "function_name": "CreateAppointment",
+        "parameter": "Notes",
+        "suggested_correction": "Note",
+        "reason": "Parameter name does not match OpenDental API convention"
+      },
+      {
+        "function_name": "UpdateAppointment",
+        "parameter": "AppointmentId",
+        "suggested_correction": "AptNum",
+        "reason": "Parameter name does not match OpenDental API convention"
+      },
+      {
+        "function_name": "UpdateAppointment",
+        "parameter": "Notes",
+        "suggested_correction": "Note",
+        "reason": "Parameter name does not match OpenDental API convention"
+      }
+    ]
+  },
+  "recommendations": [
+    "Remove duplicate function definitions from registry"
+  ]
+}

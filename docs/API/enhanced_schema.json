@@ -1,0 +1,3723 @@
+{
+  "metadata": {
+    "generated_from": "output.json",
+    "generated_at": "2025-10-27T16:57:35.425Z",
+    "total_tables": 419,
+    "core_tables": 20,
+    "mapped_functions": 7
+  },
+  "tables": {
+    "adjustment": {
+      "name": "adjustment",
+      "summary": "An adjustment in the patient account.  Usually, adjustments are very simple, just being assigned to one patient and provider.  But they can also be attached to a procedure to represent a discount on that procedure.  Attaching adjustments to procedures is not automated, so it is not very common.",
+      "primary_key": {
+        "name": "AdjNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "PatNum",
+          "references_table": "patient",
+          "references_column": "PatNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "AdjType",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ProvNum",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ProcNum",
+          "references_table": "procedurelog",
+          "references_column": "ProcNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ClinicNum",
+          "references_table": "clinic",
+          "references_column": "ClinicNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "StatementNum",
+          "references_table": "statement",
+          "references_column": "StatementNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "SecUserNumEntry",
+          "references_table": "userod",
+          "references_column": "UserNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [],
+      "required_fields": [],
+      "optional_fields": [
+        "AdjNum",
+        "AdjDate",
+        "AdjAmt",
+        "PatNum",
+        "AdjType",
+        "ProvNum",
+        "AdjNote",
+        "ProcDate",
+        "ProcNum",
+        "DateEntry",
+        "ClinicNum",
+        "StatementNum",
+        "SecUserNumEntry",
+        "SecDateTEdit",
+        "TaxTransID"
+      ]
+    },
+    "appointment": {
+      "name": "appointment",
+      "summary": "Appointments can show in the Appointments module, or they can be on the unscheduled list.  An appointment object is also used to store the Planned appointment.  The planned appointment never gets scheduled, but instead gets copied.  Also see histappointment, which keeps a historical record.",
+      "primary_key": {
+        "name": "AptNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "PatNum",
+          "references_table": "patient",
+          "references_column": "PatNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "Confirmed",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "Op",
+          "references_table": "operatory",
+          "references_column": "OperatoryNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ProvNum",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ProvHyg",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "NextAptNum",
+          "references_table": "appointment",
+          "references_column": "AptNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "UnschedStatus",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "Assistant",
+          "references_table": "employee",
+          "references_column": "EmployeeNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ClinicNum",
+          "references_table": "clinic",
+          "references_column": "ClinicNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "InsPlan1",
+          "references_table": "insplan",
+          "references_column": "PlanNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "InsPlan2",
+          "references_table": "insplan",
+          "references_column": "PlanNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "AppointmentTypeNum",
+          "references_table": "appointmenttype",
+          "references_column": "AppointmentTypeNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "SecUserNumEntry",
+          "references_table": "userod",
+          "references_column": "UserNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [
+        {
+          "column": "AptStatus",
+          "enum_name": "ApptStatus",
+          "values": [
+            "."
+          ]
+        },
+        {
+          "column": "Priority",
+          "enum_name": "ApptPriority",
+          "values": [
+            "0",
+            "for",
+            "normal",
+            "appointments",
+            "1",
+            "for",
+            "ASAP."
+          ]
+        }
+      ],
+      "required_fields": [],
+      "optional_fields": [
+        "AptNum",
+        "PatNum",
+        "AptStatus",
+        "Pattern",
+        "Confirmed",
+        "TimeLocked",
+        "Op",
+        "Note",
+        "ProvNum",
+        "ProvHyg",
+        "AptDateTime",
+        "NextAptNum",
+        "UnschedStatus",
+        "IsNewPatient",
+        "ProcDescript",
+        "Assistant",
+        "ClinicNum",
+        "IsHygiene",
+        "DateTStamp",
+        "DateTimeArrived",
+        "DateTimeSeated",
+        "DateTimeDismissed",
+        "InsPlan1",
+        "InsPlan2",
+        "DateTimeAskedToArrive",
+        "ProcsColored",
+        "ColorOverride",
+        "AppointmentTypeNum",
+        "SecUserNumEntry",
+        "SecDateTEntry",
+        "Priority",
+        "ProvBarText",
+        "PatternSecondary",
+        "SecurityHash",
+        "ItemOrderPlanned",
+        "IsMirrored"
+      ]
+    },
+    "benefit": {
+      "name": "benefit",
+      "summary": "Corresponds to the benefit table in the database which replaces the old covpat table.  A benefit is usually a percentage, deductible, limitation, max, or similar. Each row represents a single benefit.  A benefit can have a value in EITHER PlanNum OR PatPlanNum.  If it is for a PlanNum, the most common, then the benefit is attached to an insurance plan.  If it is for a PatPlanNum, then it overrides the plan benefit, usually a percentage, for a single patient.  Benefits we can't handle yet include posterior composites, COB duplication, amounts used, in/out of plan network, authorization required, missing tooth exclusion, and any date related limitations like waiting periods.Here are examples of typical usage which parallel X12 usage fields shown in this order:CovCat, ProcCode(- indicates blank), BenefitType, Percent, MonetaryAmt, TimePeriod, QuantityQualifier, Quantity, CoverageLevelAnnual Max Indiv $1000: Non General,-,Limitations,-1,1000,CalendarYear,None,0,IndividualRestorative 80%: Restorative,-,CoInsurance,80,-1,CalendarYear,None,0,None$50 deductible: None/General,-,Deductible,-1,5 CalendarYear,None,0,IndividualDeductible waived on preventive: Preventive,-,Deductible,-1,0,CalendarYear,None,0,Individual1 pano every 5 years: None,D0330,Limitations,-1,-1,Years?,Years, None2 exams per year: Preventive(or Diagnostic),-,Limitations,-1,-1,BenefitYear,NumberOfServices,2,NoneFluoride limit 18yo: None, D1204, Limitations, -1, -1, CalendarYear/None, AgeLimi 18,None (might require a second identical entry for D1205)4BW every 6 months: None, D0274, Limitations, -1, -1, None, Months, 6,None.The text above might be difficult to read.  We trying to improve the white spacing.",
+      "primary_key": {
+        "name": "BenefitNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "PlanNum",
+          "references_table": "insplan",
+          "references_column": "PlanNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "PatPlanNum",
+          "references_table": "patplan",
+          "references_column": "PatPlanNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "CovCatNum",
+          "references_table": "covcat",
+          "references_column": "CovCatNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "CodeNum",
+          "references_table": "procedurecode",
+          "references_column": "CodeNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "CodeGroupNum",
+          "references_table": "codegroup",
+          "references_column": "CodeGroupNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [
+        {
+          "column": "BenefitType",
+          "enum_name": "InsBenefitType",
+          "values": [
+            "Corresponds",
+            "to",
+            "X12",
+            "EB01.",
+            "Examples:",
+            "0=ActiveCoverage",
+            "1=CoInsurance",
+            "2=Deductible",
+            "3=CoPayment",
+            "4=Exclusions",
+            "5=Limitations.",
+            "ActiveCoverage",
+            "doesn't",
+            "really",
+            "provide",
+            "meaningful",
+            "information."
+          ]
+        },
+        {
+          "column": "TimePeriod",
+          "enum_name": "BenefitTimePeriod",
+          "values": [
+            "Corresponds",
+            "to",
+            "X12",
+            "EB06",
+            "Time",
+            "Period",
+            "Qualifier.",
+            "Examples:",
+            "0=None",
+            "1=ServiceYear",
+            "2=CalendarYear",
+            "3=Lifetime",
+            "4=Years.",
+            "Might",
+            "add",
+            "Visit",
+            "and",
+            "Remaining."
+          ]
+        },
+        {
+          "column": "QuantityQualifier",
+          "enum_name": "BenefitQuantity",
+          "values": [
+            "Corresponds",
+            "to",
+            "X12",
+            "EB09.",
+            "Not",
+            "used",
+            "very",
+            "much.",
+            "Examples:",
+            "0=None",
+            "1=NumberOfServices",
+            "2=AgeLimit",
+            "3=Visits",
+            "4=Years",
+            "5=Months"
+          ]
+        },
+        {
+          "column": "CoverageLevel",
+          "enum_name": "BenefitCoverageLevel",
+          "values": [
+            "Corresponds",
+            "to",
+            "X12",
+            "EB02.",
+            "None",
+            "Individual",
+            "or",
+            "Family.",
+            "Individual",
+            "and",
+            "Family",
+            "are",
+            "commonly",
+            "used",
+            "for",
+            "deductibles",
+            "and",
+            "maximums.",
+            "None",
+            "is",
+            "commonly",
+            "used",
+            "for",
+            "percentages",
+            "and",
+            "copays."
+          ]
+        },
+        {
+          "column": "TreatArea",
+          "enum_name": "TreatmentArea",
+          "values": [
+            ".",
+            "Only",
+            "for",
+            "frequency",
+            "limitations",
+            "ignored",
+            "for",
+            "all",
+            "other",
+            "benefits.",
+            "Enforced",
+            "by",
+            "the",
+            "UI.",
+            "Example",
+            "3",
+            "fillings",
+            "per",
+            "year",
+            "[mouth].",
+            "Tests:",
+            "140",
+            "through",
+            "147.",
+            "0",
+            "means",
+            "default."
+          ]
+        }
+      ],
+      "required_fields": [],
+      "optional_fields": [
+        "BenefitNum",
+        "PlanNum",
+        "PatPlanNum",
+        "CovCatNum",
+        "BenefitType",
+        "Percent",
+        "MonetaryAmt",
+        "TimePeriod",
+        "QuantityQualifier",
+        "Quantity",
+        "CodeNum",
+        "CoverageLevel",
+        "SecDateTEntry",
+        "SecDateTEdit",
+        "CodeGroupNum",
+        "TreatArea"
+      ]
+    },
+    "claim": {
+      "name": "claim",
+      "summary": "The claim table holds information about individual claims.  Each row represents one claim.",
+      "primary_key": {
+        "name": "ClaimNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "PatNum",
+          "references_table": "patient",
+          "references_column": "PatNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "PlanNum",
+          "references_table": "insplan",
+          "references_column": "PlanNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ProvTreat",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ProvBill",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ReferringProv",
+          "references_table": "referral",
+          "references_column": "ReferralNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "PlanNum2",
+          "references_table": "insplan",
+          "references_column": "PlanNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ClinicNum",
+          "references_table": "clinic",
+          "references_column": "ClinicNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ClaimForm",
+          "references_table": "claimform",
+          "references_column": "ClaimFormNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "InsSubNum",
+          "references_table": "inssub",
+          "references_column": "InsSubNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "InsSubNum2",
+          "references_table": "inssub",
+          "references_column": "InsSubNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "CustomTracking",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ProvOrderOverride",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "SecUserNumEntry",
+          "references_table": "userod",
+          "references_column": "UserNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "OrderingReferralNum",
+          "references_table": "referral",
+          "references_column": "ReferralNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [
+        {
+          "column": "PlaceService",
+          "enum_name": "PlaceOfService",
+          "values": [
+            "."
+          ]
+        },
+        {
+          "column": "EmployRelated",
+          "enum_name": "YN",
+          "values": [
+            "."
+          ]
+        },
+        {
+          "column": "PatRelat",
+          "enum_name": "Relat",
+          "values": [
+            "Relationship",
+            "to",
+            "subscriber.",
+            "The",
+            "relationship",
+            "is",
+            "copied",
+            "from",
+            "InsPlan",
+            "when",
+            "the",
+            "claim",
+            "is",
+            "created.",
+            "It",
+            "might",
+            "need",
+            "to",
+            "be",
+            "changed",
+            "in",
+            "both",
+            "places."
+          ]
+        },
+        {
+          "column": "PatRelat2",
+          "enum_name": "Relat",
+          "values": [
+            "The",
+            "relationship",
+            "to",
+            "the",
+            "subscriber",
+            "for",
+            "other",
+            "coverage",
+            "on",
+            "this",
+            "claim."
+          ]
+        },
+        {
+          "column": "SpecialProgramCode",
+          "enum_name": "EnumClaimSpecialProgram",
+          "values": [
+            "This",
+            "is",
+            "used",
+            "to",
+            "track",
+            "EPSDT."
+          ]
+        },
+        {
+          "column": "MedType",
+          "enum_name": "EnumClaimMedType",
+          "values": [
+            "0=Dental",
+            "1=Medical",
+            "2=Institutional"
+          ]
+        },
+        {
+          "column": "CorrectionType",
+          "enum_name": "ClaimCorrectionType",
+          "values": [
+            "X12",
+            "CLM05-3.",
+            "Usually",
+            "set",
+            "to",
+            "original",
+            "but",
+            "can",
+            "be",
+            "used",
+            "to",
+            "resubmit",
+            "claims.",
+            "Also",
+            "used",
+            "in",
+            "1500",
+            "Medical",
+            "Claim",
+            "Form",
+            "field",
+            "22."
+          ]
+        },
+        {
+          "column": "DateIllnessInjuryPregQualifier",
+          "enum_name": "DateIllnessInjuryPregQualifier",
+          "values": [
+            "3",
+            "digit",
+            "code",
+            "used",
+            "in",
+            "1500",
+            "Medical",
+            "Claim",
+            "Form",
+            "'Qual'",
+            "box",
+            "of",
+            "field",
+            "14.",
+            "Valid",
+            "values",
+            "are",
+            "431",
+            "or",
+            "484."
+          ]
+        },
+        {
+          "column": "DateOtherQualifier",
+          "enum_name": "DateOtherQualifier",
+          "values": [
+            "3",
+            "digit",
+            "code",
+            "used",
+            "in",
+            "1500",
+            "Medical",
+            "Claim",
+            "Form",
+            "'Qual'",
+            "box",
+            "of",
+            "field",
+            "15.",
+            "Valid",
+            "values",
+            "are",
+            "090",
+            "091",
+            "304",
+            "439",
+            "444",
+            "453",
+            "454",
+            "455",
+            "and",
+            "471."
+          ]
+        }
+      ],
+      "required_fields": [
+        "CanadianMandProsthMaterial",
+        "CanadianMaxProsthMaterial",
+        "AdmissionTypeCode",
+        "AdmissionSourceCode",
+        "PatientStatusCode"
+      ],
+      "optional_fields": [
+        "ClaimNum",
+        "PatNum",
+        "DateService",
+        "DateSent",
+        "ClaimStatus",
+        "DateReceived",
+        "PlanNum",
+        "ProvTreat",
+        "ClaimFee",
+        "InsPayEst",
+        "InsPayAmt",
+        "DedApplied",
+        "PreAuthString",
+        "IsProsthesis",
+        "PriorDate",
+        "ReasonUnderPaid",
+        "ClaimNote",
+        "ClaimType",
+        "ProvBill",
+        "ReferringProv",
+        "RefNumString",
+        "PlaceService",
+        "AccidentRelated",
+        "AccidentDate",
+        "AccidentST",
+        "EmployRelated",
+        "IsOrtho",
+        "OrthoRemainM",
+        "OrthoDate",
+        "PatRelat",
+        "PlanNum2",
+        "PatRelat2",
+        "WriteOff",
+        "Radiographs",
+        "ClinicNum",
+        "ClaimForm",
+        "AttachedImages",
+        "AttachedModels",
+        "AttachedFlags",
+        "AttachmentID",
+        "CanadianMaterialsForwarded",
+        "CanadianReferralProviderNum",
+        "CanadianReferralReason",
+        "CanadianIsInitialLower",
+        "CanadianDateInitialLower",
+        "CanadianIsInitialUpper",
+        "CanadianDateInitialUpper",
+        "InsSubNum",
+        "InsSubNum2",
+        "CanadaTransRefNum",
+        "CanadaEstTreatStartDate",
+        "CanadaInitialPayment",
+        "CanadaPaymentMode",
+        "CanadaTreatDuration",
+        "CanadaNumAnticipatedPayments",
+        "CanadaAnticipatedPayAmount",
+        "PriorAuthorizationNumber",
+        "SpecialProgramCode",
+        "UniformBillType",
+        "MedType",
+        "CustomTracking",
+        "DateResent",
+        "CorrectionType",
+        "ClaimIdentifier",
+        "OrigRefNum",
+        "ProvOrderOverride",
+        "OrthoTotalM",
+        "ShareOfCost",
+        "SecUserNumEntry",
+        "SecDateEntry",
+        "SecDateTEdit",
+        "OrderingReferralNum",
+        "DateSentOrig",
+        "DateIllnessInjuryPreg",
+        "DateIllnessInjuryPregQualifier",
+        "DateOther",
+        "DateOtherQualifier",
+        "IsOutsideLab",
+        "SecurityHash",
+        "Narrative"
+      ]
+    },
+    "claimproc": {
+      "name": "claimproc",
+      "summary": "Links procedures to claims.  Also links ins payments to procedures or claims.  Also used for estimating procedures even if no claim yet.  Warning: One proc might be linked twice to a given claim if insurance made two payments.  Many of the important fields are actually optional.  For instance, ProcNum is only required if itemizing ins payment, and ClaimNum is blank if Status=adjustment,cap,or estimate.",
+      "primary_key": {
+        "name": "ClaimProcNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "ProcNum",
+          "references_table": "procedurelog",
+          "references_column": "ProcNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ClaimNum",
+          "references_table": "claim",
+          "references_column": "ClaimNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "PatNum",
+          "references_table": "patient",
+          "references_column": "PatNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ProvNum",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ClaimPaymentNum",
+          "references_table": "claimpayment",
+          "references_column": "ClaimPaymentNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "PlanNum",
+          "references_table": "insplan",
+          "references_column": "PlanNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ClinicNum",
+          "references_table": "clinic",
+          "references_column": "ClinicNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "InsSubNum",
+          "references_table": "inssub",
+          "references_column": "InsSubNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "PayPlanNum",
+          "references_table": "payplan",
+          "references_column": "PayPlanNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ClaimPaymentTracking",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "SecUserNumEntry",
+          "references_table": "userod",
+          "references_column": "UserNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [
+        {
+          "column": "Status",
+          "enum_name": "ClaimProcStatus",
+          "values": [
+            ".",
+            "When",
+            "setting",
+            "recieved\\supplemental",
+            "must",
+            "set",
+            "DateEntry."
+          ]
+        }
+      ],
+      "required_fields": [],
+      "optional_fields": [
+        "ClaimProcNum",
+        "ProcNum",
+        "ClaimNum",
+        "PatNum",
+        "ProvNum",
+        "FeeBilled",
+        "InsPayEst",
+        "DedApplied",
+        "Status",
+        "InsPayAmt",
+        "Remarks",
+        "ClaimPaymentNum",
+        "PlanNum",
+        "DateCP",
+        "WriteOff",
+        "CodeSent",
+        "AllowedOverride",
+        "Percentage",
+        "PercentOverride",
+        "CopayAmt",
+        "NoBillIns",
+        "PaidOtherIns",
+        "BaseEst",
+        "CopayOverride",
+        "ProcDate",
+        "DateEntry",
+        "LineNumber",
+        "DedEst",
+        "DedEstOverride",
+        "InsEstTotal",
+        "InsEstTotalOverride",
+        "PaidOtherInsOverride",
+        "EstimateNote",
+        "WriteOffEst",
+        "WriteOffEstOverride",
+        "ClinicNum",
+        "InsSubNum",
+        "PaymentRow",
+        "PayPlanNum",
+        "ClaimPaymentTracking",
+        "SecUserNumEntry",
+        "SecDateEntry",
+        "SecDateTEdit",
+        "DateSuppReceived",
+        "DateInsFinalized",
+        "IsTransfer",
+        "ClaimAdjReasonCodes",
+        "IsOverpay",
+        "SecurityHash"
+      ]
+    },
+    "claimtracking": {
+      "name": "claimtracking",
+      "summary": "",
+      "primary_key": {
+        "name": "ClaimTrackingNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "ClaimNum",
+          "references_table": "claim",
+          "references_column": "ClaimNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "UserNum",
+          "references_table": "user",
+          "references_column": "UserNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "TrackingDefNum",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "TrackingErrorDefNum",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [
+        {
+          "column": "TrackingType",
+          "enum_name": "ClaimTrackingType",
+          "values": [
+            "Identifies",
+            "the",
+            "type",
+            "of",
+            "claimtracking",
+            "row."
+          ]
+        }
+      ],
+      "required_fields": [],
+      "optional_fields": [
+        "ClaimTrackingNum",
+        "ClaimNum",
+        "TrackingType",
+        "UserNum",
+        "DateTimeEntry",
+        "Note",
+        "TrackingDefNum",
+        "TrackingErrorDefNum"
+      ]
+    },
+    "clinic": {
+      "name": "clinic",
+      "summary": "A clinic is usually a separate physical office location.  If multiple clinics are sharing one database, then this is used.  Patients, Operatories, Claims, and many other types of objects can be assigned to a clinic.",
+      "primary_key": {
+        "name": "ClinicNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "InsBillingProv",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "EmailAddressNum",
+          "references_table": "emailaddress",
+          "references_column": "EmailAddressNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "DefaultProv",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "Region",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "MedLabAccountNum",
+          "references_table": "medlab",
+          "references_column": "PatAccountNum",
+          "type": "varchar(16)"
+        }
+      ],
+      "enums": [
+        {
+          "column": "DefaultPlaceService",
+          "enum_name": "PlaceOfService",
+          "values": [
+            "Usually",
+            "0",
+            "unless",
+            "a",
+            "mobile",
+            "clinic",
+            "for",
+            "instance."
+          ]
+        }
+      ],
+      "required_fields": [
+        "Description",
+        "Abbr"
+      ],
+      "optional_fields": [
+        "ClinicNum",
+        "Address",
+        "Address2",
+        "City",
+        "State",
+        "Zip",
+        "Phone",
+        "BankNumber",
+        "DefaultPlaceService",
+        "InsBillingProv",
+        "Fax",
+        "EmailAddressNum",
+        "DefaultProv",
+        "SmsContractDate",
+        "SmsMonthlyLimit",
+        "IsMedicalOnly",
+        "BillingAddress",
+        "BillingAddress2",
+        "BillingCity",
+        "BillingState",
+        "BillingZip",
+        "PayToAddress",
+        "PayToAddress2",
+        "PayToCity",
+        "PayToState",
+        "PayToZip",
+        "UseBillAddrOnClaims",
+        "Region",
+        "ItemOrder",
+        "IsInsVerifyExcluded",
+        "MedLabAccountNum",
+        "IsConfirmEnabled",
+        "IsConfirmDefault",
+        "IsNewPatApptExcluded",
+        "IsHidden",
+        "ExternalID",
+        "SchedNote",
+        "HasProcOnRx",
+        "TimeZone",
+        "EmailAliasOverride"
+      ]
+    },
+    "definition": {
+      "name": "definition",
+      "summary": "The info in the definition table is used by other tables extensively.  Almost every table in the database links to definition. Almost all links to this table will be to a DefNum.  Using the DefNum, you can find any of the other fields of interest, usually the ItemName. Make sure to look at the Defs class to see how the definitions are used.  Loaded into memory ahead of time for speed.",
+      "primary_key": {
+        "name": "DefNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [],
+      "enums": [],
+      "required_fields": [],
+      "optional_fields": [
+        "DefNum",
+        "Category",
+        "ItemOrder",
+        "ItemName",
+        "ItemValue",
+        "ItemColor",
+        "IsHidden"
+      ]
+    },
+    "employee": {
+      "name": "employee",
+      "summary": "An employee at the dental office.",
+      "primary_key": {
+        "name": "EmployeeNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "ReportsTo",
+          "references_table": "employee",
+          "references_column": "EmployeeNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [],
+      "required_fields": [],
+      "optional_fields": [
+        "EmployeeNum",
+        "LName",
+        "FName",
+        "MiddleI",
+        "IsHidden",
+        "ClockStatus",
+        "PhoneExt",
+        "PayrollID",
+        "WirelessPhone",
+        "EmailWork",
+        "EmailPersonal",
+        "IsFurloughed",
+        "IsWorkingHome",
+        "ReportsTo"
+      ]
+    },
+    "insplan": {
+      "name": "insplan",
+      "summary": "Subscribers can share insplans by using the InsSub table.  The patplan table determines coverage for individual patients.  InsPlans can also exist without any subscriber. ",
+      "primary_key": {
+        "name": "PlanNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "FeeSched",
+          "references_table": "feesched",
+          "references_column": "FeeSchedNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ClaimFormNum",
+          "references_table": "claimform",
+          "references_column": "ClaimFormNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "CopayFeeSched",
+          "references_table": "feesched",
+          "references_column": "FeeSchedNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "EmployerNum",
+          "references_table": "employer",
+          "references_column": "EmployerNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "CarrierNum",
+          "references_table": "carrier",
+          "references_column": "CarrierNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "AllowedFeeSched",
+          "references_table": "feesched",
+          "references_column": "FeeSchedNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "FilingCode",
+          "references_table": "insfilingcode",
+          "references_column": "InsFilingCodeNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "FilingCodeSubtype",
+          "references_table": "insfilingcodesubtype",
+          "references_column": "InsFilingCodeSubtypeNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "SopCode",
+          "references_table": "sop",
+          "references_column": "SopCode",
+          "type": "varchar(255)"
+        },
+        {
+          "column": "SecUserNumEntry",
+          "references_table": "userod",
+          "references_column": "UserNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "BillingType",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [
+        {
+          "column": "CobRule",
+          "enum_name": "EnumCobRule",
+          "values": [
+            "0=Basic",
+            "1=Standard",
+            "2=CarveOut."
+          ]
+        },
+        {
+          "column": "OrthoType",
+          "enum_name": "OrthoClaimType",
+          "values": [
+            "0=InitialClaimOnly",
+            "1=InitialPlusVisit",
+            "2=InitialPlusPeriodic.",
+            "If",
+            "this",
+            "is",
+            "an",
+            "ortho",
+            "claim",
+            "dictates",
+            "what",
+            "type",
+            "of",
+            "Ortho",
+            "claim",
+            "it",
+            "is."
+          ]
+        },
+        {
+          "column": "OrthoAutoProcFreq",
+          "enum_name": "OrthoAutoProcFrequency",
+          "values": [
+            "The",
+            "frequency",
+            "that",
+            "the",
+            "automatic",
+            "procedures",
+            "and",
+            "claims",
+            "are",
+            "created",
+            "for",
+            "insplans",
+            "with",
+            "an",
+            "InitialPlusPeriodic",
+            "OrthoType"
+          ]
+        },
+        {
+          "column": "ExclusionFeeRule",
+          "enum_name": "ExclusionRule",
+          "values": [
+            "The",
+            "exclusion",
+            "rule",
+            "for",
+            "this",
+            "insurance",
+            "plan.",
+            "PracticeDefault",
+            "by",
+            "default.",
+            "It",
+            "determines",
+            "how",
+            "insurance",
+            "plans",
+            "should",
+            "behave",
+            "with",
+            "Exclusions."
+          ]
+        }
+      ],
+      "required_fields": [
+        "UseAltCode",
+        "CanadianDiagnosticCode",
+        "CanadianInstitutionCode"
+      ],
+      "optional_fields": [
+        "PlanNum",
+        "GroupName",
+        "GroupNum",
+        "PlanNote",
+        "FeeSched",
+        "PlanType",
+        "ClaimFormNum",
+        "ClaimsUseUCR",
+        "CopayFeeSched",
+        "EmployerNum",
+        "CarrierNum",
+        "AllowedFeeSched",
+        "TrojanID",
+        "DivisionNo",
+        "IsMedical",
+        "FilingCode",
+        "DentaideCardSequence",
+        "ShowBaseUnits",
+        "CodeSubstNone",
+        "IsHidden",
+        "MonthRenew",
+        "FilingCodeSubtype",
+        "CanadianPlanFlag",
+        "RxBIN",
+        "CobRule",
+        "SopCode",
+        "SecUserNumEntry",
+        "SecDateEntry",
+        "SecDateTEdit",
+        "HideFromVerifyList",
+        "OrthoType",
+        "OrthoAutoProcFreq",
+        "OrthoAutoProcCodeNumOverride",
+        "OrthoAutoFeeBilled",
+        "OrthoAutoClaimDaysWait",
+        "BillingType",
+        "HasPpoSubstWriteoffs",
+        "ExclusionFeeRule",
+        "ManualFeeSchedNum",
+        "IsBlueBookEnabled",
+        "InsPlansZeroWriteOffsOnAnnualMaxOverride",
+        "InsPlansZeroWriteOffsOnFreqOrAgingOverride",
+        "PerVisitPatAmount",
+        "PerVisitInsAmount"
+      ]
+    },
+    "operatory": {
+      "name": "operatory",
+      "summary": "Each row is a single operatory or column in the appts module.",
+      "primary_key": {
+        "name": "OperatoryNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "ProvDentist",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ProvHygienist",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ClinicNum",
+          "references_table": "clinic",
+          "references_column": "ClinicNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "OperatoryType",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [],
+      "required_fields": [],
+      "optional_fields": [
+        "OperatoryNum",
+        "OpName",
+        "Abbrev",
+        "ItemOrder",
+        "IsHidden",
+        "ProvDentist",
+        "ProvHygienist",
+        "IsHygiene",
+        "ClinicNum",
+        "DateTStamp",
+        "SetProspective",
+        "IsWebSched",
+        "IsNewPatAppt",
+        "OperatoryType"
+      ]
+    },
+    "patient": {
+      "name": "patient",
+      "summary": "One row for each patient.  Includes deleted patients.",
+      "primary_key": {
+        "name": "PatNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "Guarantor",
+          "references_table": "patient",
+          "references_column": "PatNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "PriProv",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "SecProv",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "FeeSched",
+          "references_table": "feesched",
+          "references_column": "FeeSchedNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "BillingType",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "EmployerNum",
+          "references_table": "employer",
+          "references_column": "EmployerNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "County",
+          "references_table": "county",
+          "references_column": "CountyName",
+          "type": "varchar(255)"
+        },
+        {
+          "column": "ClinicNum",
+          "references_table": "clinic",
+          "references_column": "ClinicNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "SiteNum",
+          "references_table": "site",
+          "references_column": "SiteNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ResponsParty",
+          "references_table": "patient",
+          "references_column": "PatNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "SuperFamily",
+          "references_table": "patient",
+          "references_column": "PatNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "SecUserNumEntry",
+          "references_table": "userod",
+          "references_column": "UserNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "DiscountPlanNum",
+          "references_table": "discountplan",
+          "references_column": "DiscountPlanNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [
+        {
+          "column": "Position",
+          "enum_name": "PatientPosition",
+          "values": [
+            "Marital",
+            "status",
+            "would",
+            "probably",
+            "be",
+            "a",
+            "better",
+            "name",
+            "for",
+            "this",
+            "column."
+          ]
+        },
+        {
+          "column": "GradeLevel",
+          "enum_name": "PatientGrade",
+          "values": [
+            "Gradelevel."
+          ]
+        },
+        {
+          "column": "Urgency",
+          "enum_name": "TreatmentUrgency",
+          "values": [
+            "Used",
+            "in",
+            "public",
+            "health",
+            "screenings."
+          ]
+        },
+        {
+          "column": "PreferConfirmMethod",
+          "enum_name": "ContactMethod",
+          "values": [
+            "Used",
+            "for",
+            "eCR",
+            "which",
+            "includes",
+            "eReminders",
+            "eConfirmations."
+          ]
+        },
+        {
+          "column": "PreferContactConfidential",
+          "enum_name": "ContactMethod",
+          "values": [
+            "Used",
+            "for",
+            "EHR."
+          ]
+        }
+      ],
+      "required_fields": [
+        "PriProv"
+      ],
+      "optional_fields": [
+        "PatNum",
+        "LName",
+        "FName",
+        "MiddleI",
+        "Preferred",
+        "PatStatus",
+        "Gender",
+        "Position",
+        "Birthdate",
+        "SSN",
+        "Address",
+        "Address2",
+        "City",
+        "State",
+        "Zip",
+        "HmPhone",
+        "WkPhone",
+        "WirelessPhone",
+        "Guarantor",
+        "CreditType",
+        "Email",
+        "Salutation",
+        "EstBalance",
+        "SecProv",
+        "FeeSched",
+        "BillingType",
+        "ImageFolder",
+        "AddrNote",
+        "FamFinUrgNote",
+        "MedUrgNote",
+        "ApptModNote",
+        "StudentStatus",
+        "SchoolName",
+        "ChartNumber",
+        "MedicaidID",
+        "Bal_0_30",
+        "Bal_31_60",
+        "Bal_61_90",
+        "BalOver90",
+        "InsEst",
+        "BalTotal",
+        "EmployerNum",
+        "EmploymentNote",
+        "County",
+        "GradeLevel",
+        "Urgency",
+        "DateFirstVisit",
+        "ClinicNum",
+        "HasIns",
+        "TrophyFolder",
+        "PlannedIsDone",
+        "Premed",
+        "Ward",
+        "PreferConfirmMethod",
+        "PreferContactMethod",
+        "PreferRecallMethod",
+        "SchedBeforeTime",
+        "SchedAfterTime",
+        "SchedDayOfWeek",
+        "Language",
+        "AdmitDate",
+        "Title",
+        "PayPlanDue",
+        "SiteNum",
+        "DateTStamp",
+        "ResponsParty",
+        "CanadianEligibilityCode",
+        "AskToArriveEarly",
+        "PreferContactConfidential",
+        "SuperFamily",
+        "TxtMsgOk",
+        "SmokingSnoMed",
+        "Country",
+        "DateTimeDeceased",
+        "BillingCycleDay",
+        "SecUserNumEntry",
+        "SecDateEntry",
+        "HasSuperBilling",
+        "PatNumCloneFrom",
+        "DiscountPlanNum",
+        "HasSignedTil",
+        "ShortCodeOptIn",
+        "SecurityHash"
+      ]
+    },
+    "patplan": {
+      "name": "patplan",
+      "summary": "Each row represents the linking of one insplan to one patient for current coverage.  Dropping a plan will delete the entry in this table.  Deleting a patplan will delete the actual insplan (if no dependencies).",
+      "primary_key": {
+        "name": "PatPlanNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "InsSubNum",
+          "references_table": "inssub",
+          "references_column": "InsSubNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [
+        {
+          "column": "Relationship",
+          "enum_name": "Relat",
+          "values": [
+            "Remember",
+            "that",
+            "this",
+            "may",
+            "need",
+            "to",
+            "be",
+            "changed",
+            "in",
+            "the",
+            "Claim",
+            "also",
+            "if",
+            "already",
+            "created."
+          ]
+        }
+      ],
+      "required_fields": [],
+      "optional_fields": [
+        "PatPlanNum",
+        "PatNum",
+        "Ordinal",
+        "IsPending",
+        "Relationship",
+        "PatID",
+        "InsSubNum",
+        "OrthoAutoFeeBilledOverride",
+        "OrthoAutoNextClaimDate",
+        "SecDateTEntry",
+        "SecDateTEdit"
+      ]
+    },
+    "payment": {
+      "name": "payment",
+      "summary": "A patient payment.  Always has at least one split.",
+      "primary_key": {
+        "name": "PayNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "PayType",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "PatNum",
+          "references_table": "patient",
+          "references_column": "PatNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ClinicNum",
+          "references_table": "clinic",
+          "references_column": "ClinicNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "DepositNum",
+          "references_table": "deposit",
+          "references_column": "DepositNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "SecUserNumEntry",
+          "references_table": "userod",
+          "references_column": "UserNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [
+        {
+          "column": "PaymentSource",
+          "enum_name": "CreditCardSource",
+          "values": [
+            "Indicates",
+            "the",
+            "origin",
+            "of",
+            "the",
+            "payment",
+            "if",
+            "the",
+            "payment",
+            "came",
+            "from",
+            "a",
+            "credit",
+            "card",
+            "or",
+            "from",
+            "an",
+            "external",
+            "API.",
+            "Will",
+            "be",
+            "'None'",
+            "if",
+            "this",
+            "payment",
+            "did",
+            "not",
+            "use",
+            "a",
+            "credit",
+            "card",
+            "or",
+            "API"
+          ]
+        },
+        {
+          "column": "ProcessStatus",
+          "enum_name": "ProcessStat",
+          "values": [
+            "Flags",
+            "whether",
+            "a",
+            "payment",
+            "came",
+            "from",
+            "online",
+            "and",
+            "needs",
+            "to",
+            "be",
+            "processed."
+          ]
+        }
+      ],
+      "required_fields": [],
+      "optional_fields": [
+        "PayNum",
+        "PayType",
+        "PayDate",
+        "PayAmt",
+        "CheckNum",
+        "BankBranch",
+        "PayNote",
+        "IsSplit",
+        "PatNum",
+        "ClinicNum",
+        "DateEntry",
+        "DepositNum",
+        "Receipt",
+        "IsRecurringCC",
+        "SecUserNumEntry",
+        "SecDateTEdit",
+        "PaymentSource",
+        "ProcessStatus",
+        "RecurringChargeDate",
+        "ExternalId",
+        "PaymentStatus",
+        "IsCcCompleted",
+        "MerchantFee"
+      ]
+    },
+    "procedurecode": {
+      "name": "procedurecode",
+      "summary": "A list setup ahead of time with all the procedure codes used by the office.  Every procedurelog entry which is attached to a patient is also linked to this table.",
+      "primary_key": {
+        "name": "ProcCode",
+        "type": "varchar(15)"
+      },
+      "foreign_keys": [
+        {
+          "column": "ProcCat",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "MedicalCode",
+          "references_table": "procedurecode",
+          "references_column": "ProcCode",
+          "type": "varchar(15)"
+        },
+        {
+          "column": "SubstitutionCode",
+          "references_table": "procedurecode",
+          "references_column": "ProcCode",
+          "type": "varchar(25)"
+        },
+        {
+          "column": "ProvNumDefault",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [
+        {
+          "column": "SubstOnlyIf",
+          "enum_name": "SubstitutionCondition",
+          "values": [
+            "Used",
+            "so",
+            "that",
+            "posterior",
+            "composites",
+            "only",
+            "substitute",
+            "if",
+            "tooth",
+            "is",
+            "molar.",
+            "Ins",
+            "usually",
+            "pays",
+            "for",
+            "premolar",
+            "composites."
+          ]
+        },
+        {
+          "column": "BypassGlobalLock",
+          "enum_name": "BypassLockStatus",
+          "values": [
+            "Specifies",
+            "whether",
+            "a",
+            "proceduce",
+            "with",
+            "this",
+            "code",
+            "can",
+            "be",
+            "created",
+            "before",
+            "the",
+            "global",
+            "lock",
+            "date.",
+            "The",
+            "only",
+            "values",
+            "that",
+            "should",
+            "be",
+            "used",
+            "for",
+            "this",
+            "field",
+            "are",
+            "NeverBypass",
+            "and",
+            "BypassIfZero."
+          ]
+        }
+      ],
+      "required_fields": [
+        "AreaAlsoToothRange"
+      ],
+      "optional_fields": [
+        "CodeNum",
+        "ProcCode",
+        "Descript",
+        "AbbrDesc",
+        "ProcTime",
+        "ProcCat",
+        "TreatArea",
+        "NoBillIns",
+        "IsProsth",
+        "DefaultNote",
+        "IsHygiene",
+        "GTypeNum",
+        "AlternateCode1",
+        "MedicalCode",
+        "IsTaxed",
+        "PaintType",
+        "GraphicColor",
+        "LaymanTerm",
+        "IsCanadianLab",
+        "PreExisting",
+        "BaseUnits",
+        "SubstitutionCode",
+        "SubstOnlyIf",
+        "DateTStamp",
+        "IsMultiVisit",
+        "DrugNDC",
+        "RevenueCodeDefault",
+        "ProvNumDefault",
+        "CanadaTimeUnits",
+        "IsRadiology",
+        "DefaultClaimNote",
+        "DefaultTPNote",
+        "BypassGlobalLock",
+        "TaxCode",
+        "PaintText",
+        "DiagnosticCodes"
+      ]
+    },
+    "procedurelog": {
+      "name": "procedurelog",
+      "summary": "Database table is procedurelog.  A procedure for a patient.  Can be treatment planned or completed.  Once it's completed, it gets tracked more closely by the security portion of the program.  A procedure can NEVER be deleted.  Status can just be changed to \"deleted\". A \"Group Note\" is a special kind of procedure. Its status is always EC. It always uses DCode \"~GRP~\". Just like all other procs, it can have exactly one ProcNote. To attach other procs a Group Note, we use the ProcGroupItem table. It does not have to have any attachd procs, and their ProcStatuses do not matter (except maybe D). The ProvNum of a GroupNote can be independently of the ProvNums on the attached procs.",
+      "primary_key": {
+        "name": "ProcNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "PatNum",
+          "references_table": "patient",
+          "references_column": "PatNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "AptNum",
+          "references_table": "appointment",
+          "references_column": "AptNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "Priority",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ProvNum",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "Dx",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "PlannedAptNum",
+          "references_table": "appointment",
+          "references_column": "AptNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ClinicNum",
+          "references_table": "clinic",
+          "references_column": "ClinicNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "MedicalCode",
+          "references_table": "procedurecode",
+          "references_column": "ProcCode",
+          "type": "varchar(15)"
+        },
+        {
+          "column": "ProcNumLab",
+          "references_table": "procedurelog",
+          "references_column": "ProcNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "BillingTypeOne",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "BillingTypeTwo",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "CodeNum",
+          "references_table": "procedurecode",
+          "references_column": "CodeNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "SiteNum",
+          "references_table": "site",
+          "references_column": "SiteNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "Prognosis",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "StatementNum",
+          "references_table": "statement",
+          "references_column": "StatementNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "RepeatChargeNum",
+          "references_table": "repeatcharge",
+          "references_column": "RepeatChargeNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ProvOrderOverride",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "SecUserNumEntry",
+          "references_table": "userod",
+          "references_column": "UserNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "OrderingReferralNum",
+          "references_table": "referral",
+          "references_column": "ReferralNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [
+        {
+          "column": "ProcStatus",
+          "enum_name": "ProcStat",
+          "values": [
+            "TP=1",
+            "Complete=2",
+            "Existing",
+            "Cur",
+            "Prov=3",
+            "Existing",
+            "Other",
+            "Prov=4",
+            "Referred=5",
+            "Deleted=6",
+            "Condition=7."
+          ]
+        },
+        {
+          "column": "PlaceService",
+          "enum_name": "PlaceOfService",
+          "values": [
+            "Only",
+            "used",
+            "in",
+            "Public",
+            "Health.",
+            "Zero(Office)",
+            "until",
+            "procedure",
+            "set",
+            "complete.",
+            "Then",
+            "it's",
+            "set",
+            "to",
+            "the",
+            "value",
+            "of",
+            "the",
+            "DefaultProcedurePlaceService",
+            "preference."
+          ]
+        },
+        {
+          "column": "DrugUnit",
+          "enum_name": "EnumProcDrugUnit",
+          "values": [
+            "For",
+            "837I",
+            "and",
+            "UB04"
+          ]
+        },
+        {
+          "column": "UnitQtyType",
+          "enum_name": "ProcUnitQtyType",
+          "values": [
+            "For",
+            "dental",
+            "the",
+            "type",
+            "is",
+            "always",
+            "sent",
+            "electronically",
+            "as",
+            "MultiProcs.",
+            "For",
+            "institutional",
+            "SV204",
+            "Days",
+            "will",
+            "be",
+            "sent",
+            "electronically",
+            "if",
+            "chosen",
+            "otherwise",
+            "ServiceUnits",
+            "will",
+            "be",
+            "sent.",
+            "For",
+            "medical",
+            "SV103",
+            "MinutesAnesth",
+            "will",
+            "be",
+            "sent",
+            "electronically",
+            "if",
+            "chosen",
+            "otherwise",
+            "ServiceUnits",
+            "will",
+            "be",
+            "sent."
+          ]
+        },
+        {
+          "column": "Urgency",
+          "enum_name": "ProcUrgency",
+          "values": [
+            "Used",
+            "in",
+            "1500",
+            "Medical",
+            "Claim",
+            "Form",
+            "box",
+            "24c.",
+            "Normal=blank",
+            "24c",
+            "Emergency='Y'",
+            "in",
+            "24c."
+          ]
+        }
+      ],
+      "required_fields": [],
+      "optional_fields": [
+        "ProcNum",
+        "PatNum",
+        "AptNum",
+        "OldCode",
+        "ProcDate",
+        "ProcFee",
+        "Surf",
+        "ToothNum",
+        "ToothRange",
+        "Priority",
+        "ProcStatus",
+        "ProvNum",
+        "Dx",
+        "PlannedAptNum",
+        "PlaceService",
+        "Prosthesis",
+        "DateOriginalProsth",
+        "ClaimNote",
+        "DateEntryC",
+        "ClinicNum",
+        "MedicalCode",
+        "DiagnosticCode",
+        "IsPrincDiag",
+        "ProcNumLab",
+        "BillingTypeOne",
+        "BillingTypeTwo",
+        "CodeNum",
+        "CodeMod1",
+        "CodeMod2",
+        "CodeMod3",
+        "CodeMod4",
+        "RevCode",
+        "UnitQty",
+        "BaseUnits",
+        "StartTime",
+        "StopTime",
+        "DateTP",
+        "SiteNum",
+        "HideGraphics",
+        "CanadianTypeCodes",
+        "ProcTime",
+        "ProcTimeEnd",
+        "DateTStamp",
+        "Prognosis",
+        "DrugUnit",
+        "DrugQty",
+        "UnitQtyType",
+        "StatementNum",
+        "IsLocked",
+        "BillingNote",
+        "RepeatChargeNum",
+        "SnomedBodySite",
+        "DiagnosticCode2",
+        "DiagnosticCode3",
+        "DiagnosticCode4",
+        "ProvOrderOverride",
+        "Discount",
+        "IsDateProsthEst",
+        "IcdVersion",
+        "IsCpoe",
+        "SecUserNumEntry",
+        "SecDateEntry",
+        "DateComplete",
+        "OrderingReferralNum",
+        "TaxAmt",
+        "Urgency",
+        "DiscountPlanAmt"
+      ]
+    },
+    "provider": {
+      "name": "provider",
+      "summary": "A provider is usually a dentist or a hygienist.  But a provider might also be a denturist, a dental student, or a dental hygiene student.  A provider might also be a 'dummy', used only for billing purposes or for notes in the Appointments module.  There is no limit to the number of providers that can be added.",
+      "primary_key": {
+        "name": "Abbr",
+        "type": "varchar(255)"
+      },
+      "foreign_keys": [
+        {
+          "column": "FeeSched",
+          "references_table": "feesched",
+          "references_column": "FeeSchedNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "Specialty",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "SchoolClassNum",
+          "references_table": "schoolclass",
+          "references_column": "SchoolClassNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "EmailAddressNum",
+          "references_table": "emailaddress",
+          "references_column": "EmailAddressNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ProvNumBillingOverride",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [
+        {
+          "column": "IsErxEnabled",
+          "enum_name": "ErxEnabledStatus",
+          "values": [
+            "Indicates",
+            "whether",
+            "or",
+            "not",
+            "the",
+            "provider",
+            "has",
+            "individually",
+            "agreed",
+            "to",
+            "accept",
+            "eRx",
+            "charges.",
+            "Defaults",
+            "to",
+            "Disabled",
+            "for",
+            "new",
+            "providers."
+          ]
+        }
+      ],
+      "required_fields": [
+        "CanadianOfficeNum"
+      ],
+      "optional_fields": [
+        "ProvNum",
+        "Abbr",
+        "ItemOrder",
+        "LName",
+        "FName",
+        "MI",
+        "Suffix",
+        "FeeSched",
+        "Specialty",
+        "SSN",
+        "StateLicense",
+        "DEANum",
+        "IsSecondary",
+        "ProvColor",
+        "IsHidden",
+        "UsingTIN",
+        "BlueCrossID",
+        "SigOnFile",
+        "MedicaidID",
+        "OutlineColor",
+        "SchoolClassNum",
+        "NationalProvID",
+        "DateTStamp",
+        "AnesthProvType",
+        "TaxonomyCodeOverride",
+        "IsCDAnet",
+        "EcwID",
+        "StateRxID",
+        "IsNotPerson",
+        "StateWhereLicensed",
+        "EmailAddressNum",
+        "IsInstructor",
+        "EhrMuStage",
+        "ProvNumBillingOverride",
+        "CustomID",
+        "ProvStatus",
+        "IsHiddenReport",
+        "IsErxEnabled",
+        "Birthdate",
+        "SchedNote",
+        "WebSchedDescript",
+        "WebSchedImageLocation",
+        "HourlyProdGoalAmt",
+        "DateTerm",
+        "PreferredName"
+      ]
+    },
+    "recall": {
+      "name": "recall",
+      "summary": "A patient can only have one recall object per type. The recall table stores a few dates that must be kept synchronized with other information in the database.  This is difficult. Anytime one of the following items changes, things need to be synchronized: procedurecode.SetRecall, any procedurelog change for a patient (procs added, deleted, completed, status changed, date changed, etc), patient status changed. There are expected to be a few bugs in the synchronization logic, so anytime a patient's recall is opened, it will also update. During synchronization, the program will frequently alter DateDueCalc, DateDue, and DatePrevious based on trigger procs. The system will also add and delete recalls as necessary. But it will not delete a recall unless all values are default and there is no useful information. When a user tries to delete a recall, they will only be successful if the trigger conditions do not apply. Otherwise, they will have to disable the recall instead.",
+      "primary_key": {
+        "name": "RecallNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "PatNum",
+          "references_table": "patient",
+          "references_column": "PatNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "RecallStatus",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "RecallTypeNum",
+          "references_table": "recalltype",
+          "references_column": "RecallTypeNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [
+        {
+          "column": "Priority",
+          "enum_name": "RecallPriority",
+          "values": [
+            "Indicates",
+            "if",
+            "the",
+            "appointment",
+            "has",
+            "any",
+            "special",
+            "priority."
+          ]
+        }
+      ],
+      "required_fields": [],
+      "optional_fields": [
+        "RecallNum",
+        "PatNum",
+        "DateDueCalc",
+        "DateDue",
+        "DatePrevious",
+        "RecallInterval",
+        "RecallStatus",
+        "Note",
+        "IsDisabled",
+        "DateTStamp",
+        "RecallTypeNum",
+        "DisableUntilBalance",
+        "DisableUntilDate",
+        "DateScheduled",
+        "Priority",
+        "TimePatternOverride"
+      ]
+    },
+    "schedule": {
+      "name": "schedule",
+      "summary": "One block of time.  Either for practice, provider, employee, or blockout.",
+      "primary_key": {
+        "name": "ScheduleNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "ProvNum",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "BlockoutType",
+          "references_table": "definition",
+          "references_column": "DefNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "EmployeeNum",
+          "references_table": "employee",
+          "references_column": "EmployeeNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ClinicNum",
+          "references_table": "clinic",
+          "references_column": "ClinicNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [
+        {
+          "column": "SchedType",
+          "enum_name": "ScheduleType",
+          "values": [
+            "0=Practice",
+            "1=Provider",
+            "2=Blockout",
+            "3=Employee.",
+            "Practice",
+            "is",
+            "used",
+            "as",
+            "a",
+            "way",
+            "to",
+            "indicate",
+            "holidays",
+            "and",
+            "as",
+            "a",
+            "way",
+            "to",
+            "put",
+            "a",
+            "note",
+            "in",
+            "for",
+            "the",
+            "entire",
+            "practice",
+            "for",
+            "one",
+            "day.",
+            "But",
+            "whenever",
+            "type",
+            "is",
+            "Practice",
+            "times",
+            "will",
+            "be",
+            "ignored."
+          ]
+        },
+        {
+          "column": "Status",
+          "enum_name": "SchedStatus",
+          "values": [
+            "enumeration",
+            "0=Open",
+            "1=Closed",
+            "2=Holiday.",
+            "All",
+            "blocks",
+            "have",
+            "a",
+            "status",
+            "of",
+            "Open",
+            "but",
+            "user",
+            "doesn't",
+            "see",
+            "the",
+            "status.",
+            "The",
+            "\"closed\"",
+            "status",
+            "was",
+            "previously",
+            "used",
+            "to",
+            "override",
+            "the",
+            "defaults",
+            "when",
+            "the",
+            "last",
+            "timeblock",
+            "was",
+            "deleted.",
+            "But",
+            "it's",
+            "nearly",
+            "phased",
+            "out",
+            "now.",
+            "Still",
+            "used",
+            "by",
+            "blockouts.",
+            "Holidays",
+            "are",
+            "a",
+            "special",
+            "type",
+            "of",
+            "practice",
+            "schedule",
+            "item",
+            "which",
+            "do",
+            "not",
+            "have",
+            "providers",
+            "attached.",
+            "Used",
+            "to",
+            "differentiate",
+            "between",
+            "Practice",
+            "SchedType",
+            "Holidays",
+            "and",
+            "Notes."
+          ]
+        }
+      ],
+      "required_fields": [],
+      "optional_fields": [
+        "ScheduleNum",
+        "SchedDate",
+        "StartTime",
+        "StopTime",
+        "SchedType",
+        "ProvNum",
+        "BlockoutType",
+        "Note",
+        "Status",
+        "EmployeeNum",
+        "DateTStamp",
+        "ClinicNum"
+      ]
+    },
+    "userod": {
+      "name": "userod",
+      "summary": "(User OD since \"user\" is a reserved word) Users are a completely separate entity from Providers and Employees even though they can be linked. A usernumber can never be changed, ensuring a permanent way to record database entries and leave an audit trail.  A user can be a provider, employee, or neither.",
+      "primary_key": {
+        "name": "UserNum",
+        "type": "bigint(20)"
+      },
+      "foreign_keys": [
+        {
+          "column": "EmployeeNum",
+          "references_table": "employee",
+          "references_column": "EmployeeNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ClinicNum",
+          "references_table": "clinic",
+          "references_column": "ClinicNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "ProvNum",
+          "references_table": "provider",
+          "references_column": "ProvNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "TaskListInBox",
+          "references_table": "tasklist",
+          "references_column": "TaskListNum",
+          "type": "bigint(20)"
+        },
+        {
+          "column": "UserNumCEMT",
+          "references_table": "userod",
+          "references_column": "UserNum",
+          "type": "bigint(20)"
+        }
+      ],
+      "enums": [],
+      "required_fields": [],
+      "optional_fields": [
+        "UserNum",
+        "UserName",
+        "Password",
+        "UserGroupNum",
+        "EmployeeNum",
+        "ClinicNum",
+        "ProvNum",
+        "IsHidden",
+        "TaskListInBox",
+        "AnesthProvType",
+        "DefaultHidePopups",
+        "PasswordIsStrong",
+        "ClinicIsRestricted",
+        "InboxHidePopups",
+        "UserNumCEMT",
+        "DateTFail",
+        "FailedAttempts",
+        "DomainUser",
+        "IsPasswordResetRequired",
+        "MobileWebPin",
+        "MobileWebPinFailedAttempts",
+        "DateTLastLogin",
+        "EClipboardClinicalPin",
+        "BadgeId"
+      ]
+    }
+  },
+  "foreign_key_mappings": {
+    "CreateAppointment": {
+      "target_table": "appointment",
+      "required_foreign_keys": {
+        "PatNum": {
+          "references": "patient.PatNum",
+          "lookup_functions": [
+            "GetMultiplePatients",
+            "GetPatients"
+          ],
+          "error_message": "PatNum is required but missing",
+          "ask_user_prompt": "Who is the patient? (provide name or phone number)"
+        },
+        "AptDateTime": {
+          "type": "datetime",
+          "format": "YYYY-MM-DD HH:MM:SS",
+          "ask_user_prompt": "When would you like to schedule this appointment?"
+        }
+      },
+      "optional_foreign_keys": {
+        "ProvNum": {
+          "references": "provider.ProvNum",
+          "lookup_functions": [
+            "GetProviders",
+            "GetMultipleProviders"
+          ],
+          "default_value": 1,
+          "use_default_if_missing": true
+        },
+        "Op": {
+          "references": "operatory.OperatoryNum",
+          "lookup_functions": [
+            "GetOperatories"
+          ],
+          "default_value": 1,
+          "use_default_if_missing": true
+        }
+      },
+      "avoid_fields": [
+        "ClinicNum"
+      ]
+    },
+    "UpdateAppointment": {
+      "target_table": "appointment",
+      "required_foreign_keys": {},
+      "optional_foreign_keys": {
+        "PatNum": {
+          "references": "patient.PatNum",
+          "lookup_functions": [
+            "GetMultiplePatients",
+            "GetPatients"
+          ],
+          "default_value": null,
+          "use_default_if_missing": true
+        },
+        "ProvNum": {
+          "references": "provider.ProvNum",
+          "lookup_functions": [
+            "GetProviders",
+            "GetMultipleProviders"
+          ],
+          "default_value": 1,
+          "use_default_if_missing": true
+        },
+        "Op": {
+          "references": "operatory.OperatoryNum",
+          "lookup_functions": [
+            "GetOperatories"
+          ],
+          "default_value": 1,
+          "use_default_if_missing": true
+        }
+      },
+      "avoid_fields": []
+    },
+    "CreatePatient": {
+      "target_table": "patient",
+      "required_foreign_keys": {},
+      "optional_foreign_keys": {},
+      "avoid_fields": []
+    },
+    "UpdatePatient": {
+      "target_table": "patient",
+      "required_foreign_keys": {},
+      "optional_foreign_keys": {},
+      "avoid_fields": []
+    },
+    "CreateClaim": {
+      "target_table": "claim",
+      "required_foreign_keys": {
+        "PatNum": {
+          "references": "patient.PatNum",
+          "lookup_functions": [
+            "GetMultiplePatients",
+            "GetPatients"
+          ],
+          "error_message": "PatNum is required but missing",
+          "ask_user_prompt": "Who is the patient? (provide name or phone number)"
+        }
+      },
+      "optional_foreign_keys": {
+        "ClinicNum": {
+          "references": "clinic.ClinicNum",
+          "lookup_functions": [
+            "GetClinics"
+          ],
+          "default_value": null,
+          "use_default_if_missing": true
+        }
+      },
+      "avoid_fields": []
+    },
+    "CreatePayment": {
+      "target_table": "payment",
+      "required_foreign_keys": {
+        "PatNum": {
+          "references": "patient.PatNum",
+          "lookup_functions": [
+            "GetMultiplePatients",
+            "GetPatients"
+          ],
+          "error_message": "PatNum is required but missing",
+          "ask_user_prompt": "Who is the patient? (provide name or phone number)"
+        }
+      },
+      "optional_foreign_keys": {
+        "ClinicNum": {
+          "references": "clinic.ClinicNum",
+          "lookup_functions": [
+            "GetClinics"
+          ],
+          "default_value": null,
+          "use_default_if_missing": true
+        }
+      },
+      "avoid_fields": []
+    },
+    "CreateProcedure": {
+      "target_table": "procedurelog",
+      "required_foreign_keys": {
+        "PatNum": {
+          "references": "patient.PatNum",
+          "lookup_functions": [
+            "GetMultiplePatients",
+            "GetPatients"
+          ],
+          "error_message": "PatNum is required but missing",
+          "ask_user_prompt": "Who is the patient? (provide name or phone number)"
+        },
+        "CodeNum": {
+          "references": "procedurecode.CodeNum",
+          "lookup_functions": [
+            "GetProcedureCodes",
+            "GetProcedureCode"
+          ],
+          "error_message": "CodeNum is required but missing",
+          "ask_user_prompt": "What procedure code?"
+        }
+      },
+      "optional_foreign_keys": {
+        "ProvNum": {
+          "references": "provider.ProvNum",
+          "lookup_functions": [
+            "GetProviders",
+            "GetMultipleProviders"
+          ],
+          "default_value": 1,
+          "use_default_if_missing": true
+        },
+        "ClinicNum": {
+          "references": "clinic.ClinicNum",
+          "lookup_functions": [
+            "GetClinics"
+          ],
+          "default_value": null,
+          "use_default_if_missing": true
+        }
+      },
+      "avoid_fields": []
+    }
+  },
+  "enum_values": {
+    "appointment.AptStatus": {
+      "enum_name": "ApptStatus",
+      "values": [
+        "."
+      ]
+    },
+    "appointment.Priority": {
+      "enum_name": "ApptPriority",
+      "values": [
+        "0",
+        "for",
+        "normal",
+        "appointments",
+        "1",
+        "for",
+        "ASAP."
+      ]
+    },
+    "benefit.BenefitType": {
+      "enum_name": "InsBenefitType",
+      "values": [
+        "Corresponds",
+        "to",
+        "X12",
+        "EB01.",
+        "Examples:",
+        "0=ActiveCoverage",
+        "1=CoInsurance",
+        "2=Deductible",
+        "3=CoPayment",
+        "4=Exclusions",
+        "5=Limitations.",
+        "ActiveCoverage",
+        "doesn't",
+        "really",
+        "provide",
+        "meaningful",
+        "information."
+      ]
+    },
+    "benefit.TimePeriod": {
+      "enum_name": "BenefitTimePeriod",
+      "values": [
+        "Corresponds",
+        "to",
+        "X12",
+        "EB06",
+        "Time",
+        "Period",
+        "Qualifier.",
+        "Examples:",
+        "0=None",
+        "1=ServiceYear",
+        "2=CalendarYear",
+        "3=Lifetime",
+        "4=Years.",
+        "Might",
+        "add",
+        "Visit",
+        "and",
+        "Remaining."
+      ]
+    },
+    "benefit.QuantityQualifier": {
+      "enum_name": "BenefitQuantity",
+      "values": [
+        "Corresponds",
+        "to",
+        "X12",
+        "EB09.",
+        "Not",
+        "used",
+        "very",
+        "much.",
+        "Examples:",
+        "0=None",
+        "1=NumberOfServices",
+        "2=AgeLimit",
+        "3=Visits",
+        "4=Years",
+        "5=Months"
+      ]
+    },
+    "benefit.CoverageLevel": {
+      "enum_name": "BenefitCoverageLevel",
+      "values": [
+        "Corresponds",
+        "to",
+        "X12",
+        "EB02.",
+        "None",
+        "Individual",
+        "or",
+        "Family.",
+        "Individual",
+        "and",
+        "Family",
+        "are",
+        "commonly",
+        "used",
+        "for",
+        "deductibles",
+        "and",
+        "maximums.",
+        "None",
+        "is",
+        "commonly",
+        "used",
+        "for",
+        "percentages",
+        "and",
+        "copays."
+      ]
+    },
+    "benefit.TreatArea": {
+      "enum_name": "TreatmentArea",
+      "values": [
+        ".",
+        "Only",
+        "for",
+        "frequency",
+        "limitations",
+        "ignored",
+        "for",
+        "all",
+        "other",
+        "benefits.",
+        "Enforced",
+        "by",
+        "the",
+        "UI.",
+        "Example",
+        "3",
+        "fillings",
+        "per",
+        "year",
+        "[mouth].",
+        "Tests:",
+        "140",
+        "through",
+        "147.",
+        "0",
+        "means",
+        "default."
+      ]
+    },
+    "claim.PlaceService": {
+      "enum_name": "PlaceOfService",
+      "values": [
+        "."
+      ]
+    },
+    "claim.EmployRelated": {
+      "enum_name": "YN",
+      "values": [
+        "."
+      ]
+    },
+    "claim.PatRelat": {
+      "enum_name": "Relat",
+      "values": [
+        "Relationship",
+        "to",
+        "subscriber.",
+        "The",
+        "relationship",
+        "is",
+        "copied",
+        "from",
+        "InsPlan",
+        "when",
+        "the",
+        "claim",
+        "is",
+        "created.",
+        "It",
+        "might",
+        "need",
+        "to",
+        "be",
+        "changed",
+        "in",
+        "both",
+        "places."
+      ]
+    },
+    "claim.PatRelat2": {
+      "enum_name": "Relat",
+      "values": [
+        "The",
+        "relationship",
+        "to",
+        "the",
+        "subscriber",
+        "for",
+        "other",
+        "coverage",
+        "on",
+        "this",
+        "claim."
+      ]
+    },
+    "claim.SpecialProgramCode": {
+      "enum_name": "EnumClaimSpecialProgram",
+      "values": [
+        "This",
+        "is",
+        "used",
+        "to",
+        "track",
+        "EPSDT."
+      ]
+    },
+    "claim.MedType": {
+      "enum_name": "EnumClaimMedType",
+      "values": [
+        "0=Dental",
+        "1=Medical",
+        "2=Institutional"
+      ]
+    },
+    "claim.CorrectionType": {
+      "enum_name": "ClaimCorrectionType",
+      "values": [
+        "X12",
+        "CLM05-3.",
+        "Usually",
+        "set",
+        "to",
+        "original",
+        "but",
+        "can",
+        "be",
+        "used",
+        "to",
+        "resubmit",
+        "claims.",
+        "Also",
+        "used",
+        "in",
+        "1500",
+        "Medical",
+        "Claim",
+        "Form",
+        "field",
+        "22."
+      ]
+    },
+    "claim.DateIllnessInjuryPregQualifier": {
+      "enum_name": "DateIllnessInjuryPregQualifier",
+      "values": [
+        "3",
+        "digit",
+        "code",
+        "used",
+        "in",
+        "1500",
+        "Medical",
+        "Claim",
+        "Form",
+        "'Qual'",
+        "box",
+        "of",
+        "field",
+        "14.",
+        "Valid",
+        "values",
+        "are",
+        "431",
+        "or",
+        "484."
+      ]
+    },
+    "claim.DateOtherQualifier": {
+      "enum_name": "DateOtherQualifier",
+      "values": [
+        "3",
+        "digit",
+        "code",
+        "used",
+        "in",
+        "1500",
+        "Medical",
+        "Claim",
+        "Form",
+        "'Qual'",
+        "box",
+        "of",
+        "field",
+        "15.",
+        "Valid",
+        "values",
+        "are",
+        "090",
+        "091",
+        "304",
+        "439",
+        "444",
+        "453",
+        "454",
+        "455",
+        "and",
+        "471."
+      ]
+    },
+    "claimproc.Status": {
+      "enum_name": "ClaimProcStatus",
+      "values": [
+        ".",
+        "When",
+        "setting",
+        "recieved\\supplemental",
+        "must",
+        "set",
+        "DateEntry."
+      ]
+    },
+    "claimtracking.TrackingType": {
+      "enum_name": "ClaimTrackingType",
+      "values": [
+        "Identifies",
+        "the",
+        "type",
+        "of",
+        "claimtracking",
+        "row."
+      ]
+    },
+    "clinic.DefaultPlaceService": {
+      "enum_name": "PlaceOfService",
+      "values": [
+        "Usually",
+        "0",
+        "unless",
+        "a",
+        "mobile",
+        "clinic",
+        "for",
+        "instance."
+      ]
+    },
+    "insplan.CobRule": {
+      "enum_name": "EnumCobRule",
+      "values": [
+        "0=Basic",
+        "1=Standard",
+        "2=CarveOut."
+      ]
+    },
+    "insplan.OrthoType": {
+      "enum_name": "OrthoClaimType",
+      "values": [
+        "0=InitialClaimOnly",
+        "1=InitialPlusVisit",
+        "2=InitialPlusPeriodic.",
+        "If",
+        "this",
+        "is",
+        "an",
+        "ortho",
+        "claim",
+        "dictates",
+        "what",
+        "type",
+        "of",
+        "Ortho",
+        "claim",
+        "it",
+        "is."
+      ]
+    },
+    "insplan.OrthoAutoProcFreq": {
+      "enum_name": "OrthoAutoProcFrequency",
+      "values": [
+        "The",
+        "frequency",
+        "that",
+        "the",
+        "automatic",
+        "procedures",
+        "and",
+        "claims",
+        "are",
+        "created",
+        "for",
+        "insplans",
+        "with",
+        "an",
+        "InitialPlusPeriodic",
+        "OrthoType"
+      ]
+    },
+    "insplan.ExclusionFeeRule": {
+      "enum_name": "ExclusionRule",
+      "values": [
+        "The",
+        "exclusion",
+        "rule",
+        "for",
+        "this",
+        "insurance",
+        "plan.",
+        "PracticeDefault",
+        "by",
+        "default.",
+        "It",
+        "determines",
+        "how",
+        "insurance",
+        "plans",
+        "should",
+        "behave",
+        "with",
+        "Exclusions."
+      ]
+    },
+    "patient.Position": {
+      "enum_name": "PatientPosition",
+      "values": [
+        "Marital",
+        "status",
+        "would",
+        "probably",
+        "be",
+        "a",
+        "better",
+        "name",
+        "for",
+        "this",
+        "column."
+      ]
+    },
+    "patient.GradeLevel": {
+      "enum_name": "PatientGrade",
+      "values": [
+        "Gradelevel."
+      ]
+    },
+    "patient.Urgency": {
+      "enum_name": "TreatmentUrgency",
+      "values": [
+        "Used",
+        "in",
+        "public",
+        "health",
+        "screenings."
+      ]
+    },
+    "patient.PreferConfirmMethod": {
+      "enum_name": "ContactMethod",
+      "values": [
+        "Used",
+        "for",
+        "eCR",
+        "which",
+        "includes",
+        "eReminders",
+        "eConfirmations."
+      ]
+    },
+    "patient.PreferContactConfidential": {
+      "enum_name": "ContactMethod",
+      "values": [
+        "Used",
+        "for",
+        "EHR."
+      ]
+    },
+    "patplan.Relationship": {
+      "enum_name": "Relat",
+      "values": [
+        "Remember",
+        "that",
+        "this",
+        "may",
+        "need",
+        "to",
+        "be",
+        "changed",
+        "in",
+        "the",
+        "Claim",
+        "also",
+        "if",
+        "already",
+        "created."
+      ]
+    },
+    "payment.PaymentSource": {
+      "enum_name": "CreditCardSource",
+      "values": [
+        "Indicates",
+        "the",
+        "origin",
+        "of",
+        "the",
+        "payment",
+        "if",
+        "the",
+        "payment",
+        "came",
+        "from",
+        "a",
+        "credit",
+        "card",
+        "or",
+        "from",
+        "an",
+        "external",
+        "API.",
+        "Will",
+        "be",
+        "'None'",
+        "if",
+        "this",
+        "payment",
+        "did",
+        "not",
+        "use",
+        "a",
+        "credit",
+        "card",
+        "or",
+        "API"
+      ]
+    },
+    "payment.ProcessStatus": {
+      "enum_name": "ProcessStat",
+      "values": [
+        "Flags",
+        "whether",
+        "a",
+        "payment",
+        "came",
+        "from",
+        "online",
+        "and",
+        "needs",
+        "to",
+        "be",
+        "processed."
+      ]
+    },
+    "procedurecode.SubstOnlyIf": {
+      "enum_name": "SubstitutionCondition",
+      "values": [
+        "Used",
+        "so",
+        "that",
+        "posterior",
+        "composites",
+        "only",
+        "substitute",
+        "if",
+        "tooth",
+        "is",
+        "molar.",
+        "Ins",
+        "usually",
+        "pays",
+        "for",
+        "premolar",
+        "composites."
+      ]
+    },
+    "procedurecode.BypassGlobalLock": {
+      "enum_name": "BypassLockStatus",
+      "values": [
+        "Specifies",
+        "whether",
+        "a",
+        "proceduce",
+        "with",
+        "this",
+        "code",
+        "can",
+        "be",
+        "created",
+        "before",
+        "the",
+        "global",
+        "lock",
+        "date.",
+        "The",
+        "only",
+        "values",
+        "that",
+        "should",
+        "be",
+        "used",
+        "for",
+        "this",
+        "field",
+        "are",
+        "NeverBypass",
+        "and",
+        "BypassIfZero."
+      ]
+    },
+    "procedurelog.ProcStatus": {
+      "enum_name": "ProcStat",
+      "values": [
+        "TP=1",
+        "Complete=2",
+        "Existing",
+        "Cur",
+        "Prov=3",
+        "Existing",
+        "Other",
+        "Prov=4",
+        "Referred=5",
+        "Deleted=6",
+        "Condition=7."
+      ]
+    },
+    "procedurelog.PlaceService": {
+      "enum_name": "PlaceOfService",
+      "values": [
+        "Only",
+        "used",
+        "in",
+        "Public",
+        "Health.",
+        "Zero(Office)",
+        "until",
+        "procedure",
+        "set",
+        "complete.",
+        "Then",
+        "it's",
+        "set",
+        "to",
+        "the",
+        "value",
+        "of",
+        "the",
+        "DefaultProcedurePlaceService",
+        "preference."
+      ]
+    },
+    "procedurelog.DrugUnit": {
+      "enum_name": "EnumProcDrugUnit",
+      "values": [
+        "For",
+        "837I",
+        "and",
+        "UB04"
+      ]
+    },
+    "procedurelog.UnitQtyType": {
+      "enum_name": "ProcUnitQtyType",
+      "values": [
+        "For",
+        "dental",
+        "the",
+        "type",
+        "is",
+        "always",
+        "sent",
+        "electronically",
+        "as",
+        "MultiProcs.",
+        "For",
+        "institutional",
+        "SV204",
+        "Days",
+        "will",
+        "be",
+        "sent",
+        "electronically",
+        "if",
+        "chosen",
+        "otherwise",
+        "ServiceUnits",
+        "will",
+        "be",
+        "sent.",
+        "For",
+        "medical",
+        "SV103",
+        "MinutesAnesth",
+        "will",
+        "be",
+        "sent",
+        "electronically",
+        "if",
+        "chosen",
+        "otherwise",
+        "ServiceUnits",
+        "will",
+        "be",
+        "sent."
+      ]
+    },
+    "procedurelog.Urgency": {
+      "enum_name": "ProcUrgency",
+      "values": [
+        "Used",
+        "in",
+        "1500",
+        "Medical",
+        "Claim",
+        "Form",
+        "box",
+        "24c.",
+        "Normal=blank",
+        "24c",
+        "Emergency='Y'",
+        "in",
+        "24c."
+      ]
+    },
+    "provider.IsErxEnabled": {
+      "enum_name": "ErxEnabledStatus",
+      "values": [
+        "Indicates",
+        "whether",
+        "or",
+        "not",
+        "the",
+        "provider",
+        "has",
+        "individually",
+        "agreed",
+        "to",
+        "accept",
+        "eRx",
+        "charges.",
+        "Defaults",
+        "to",
+        "Disabled",
+        "for",
+        "new",
+        "providers."
+      ]
+    },
+    "recall.Priority": {
+      "enum_name": "RecallPriority",
+      "values": [
+        "Indicates",
+        "if",
+        "the",
+        "appointment",
+        "has",
+        "any",
+        "special",
+        "priority."
+      ]
+    },
+    "schedule.SchedType": {
+      "enum_name": "ScheduleType",
+      "values": [
+        "0=Practice",
+        "1=Provider",
+        "2=Blockout",
+        "3=Employee.",
+        "Practice",
+        "is",
+        "used",
+        "as",
+        "a",
+        "way",
+        "to",
+        "indicate",
+        "holidays",
+        "and",
+        "as",
+        "a",
+        "way",
+        "to",
+        "put",
+        "a",
+        "note",
+        "in",
+        "for",
+        "the",
+        "entire",
+        "practice",
+        "for",
+        "one",
+        "day.",
+        "But",
+        "whenever",
+        "type",
+        "is",
+        "Practice",
+        "times",
+        "will",
+        "be",
+        "ignored."
+      ]
+    },
+    "schedule.Status": {
+      "enum_name": "SchedStatus",
+      "values": [
+        "enumeration",
+        "0=Open",
+        "1=Closed",
+        "2=Holiday.",
+        "All",
+        "blocks",
+        "have",
+        "a",
+        "status",
+        "of",
+        "Open",
+        "but",
+        "user",
+        "doesn't",
+        "see",
+        "the",
+        "status.",
+        "The",
+        "\"closed\"",
+        "status",
+        "was",
+        "previously",
+        "used",
+        "to",
+        "override",
+        "the",
+        "defaults",
+        "when",
+        "the",
+        "last",
+        "timeblock",
+        "was",
+        "deleted.",
+        "But",
+        "it's",
+        "nearly",
+        "phased",
+        "out",
+        "now.",
+        "Still",
+        "used",
+        "by",
+        "blockouts.",
+        "Holidays",
+        "are",
+        "a",
+        "special",
+        "type",
+        "of",
+        "practice",
+        "schedule",
+        "item",
+        "which",
+        "do",
+        "not",
+        "have",
+        "providers",
+        "attached.",
+        "Used",
+        "to",
+        "differentiate",
+        "between",
+        "Practice",
+        "SchedType",
+        "Holidays",
+        "and",
+        "Notes."
+      ]
+    }
+  },
+  "workflow_rules": {},
+  "natural_language_guide": "# DATABASE RELATIONSHIP RULES\n\n## Core Principle: Lookup Foreign Keys Before Create/Update\n\n### Patient Operations (PatNum)\n- PatNum is THE MOST IMPORTANT foreign key - required for appointments, claims, payments, procedures\n- ALWAYS get PatNum first by calling GetMultiplePatients with search criteria:\n  * Search by Phone if user provides phone number\n  * Search by LName + FName if user provides name\n  * If not found, ASK: 'I couldn't find that patient. Can you spell their full name or provide their phone number?'\n  * If still not found, ASK: 'Would you like me to create a new patient record?'\n\n### Appointment Operations\nCreateAppointment workflow:\n1. Get PatNum (REQUIRED):\n   - Try GetMultiplePatients with available info\n   - If not found, STOP and ASK user for patient details\n2. Get AptDateTime (REQUIRED):\n   - If user said specific time, use it\n   - If user said 'tomorrow', calculate tomorrow's date + reasonable time (2PM)\n   - If user said 'next week', pick Monday + 10AM\n   - If no time specified, ASK: 'When would you like to schedule this?'\n3. Use defaults for optional fields:\n   - ProvNum = 1 (unless user specifies a provider)\n   - Op = 1 (unless user specifies room/operatory)\n4. NEVER send ClinicNum - it causes errors in test environments\n\nUpdateAppointment workflow:\n1. Get AptNum (REQUIRED):\n   - Call GetAppointments(PatNum, Date) to find appointment\n   - If multiple found, ASK: 'Which appointment?' (describe times)\n   - If none found, ASK: 'I couldn't find an appointment. Do you want to create one?'\n\n### Provider Operations (ProvNum)\n- Default ProvNum=1 is acceptable for most operations\n- Only lookup provider if user explicitly mentions doctor name: 'with Dr. Smith'\n- If user mentions doctor, call GetProviders or GetMultipleProviders\n\n### Insurance/Claim Operations\nCreateClaim workflow:\n1. Get PatNum (REQUIRED) - from GetMultiplePatients\n2. Check insurance:\n   - Call GetInsuranceForPatient(PatNum)\n   - If no insurance, ASK: 'Does this patient have insurance on file?'\n3. Get ProvNum (REQUIRED) - default=1 or lookup\n\n### Error Recovery Strategy\nWhen you encounter an error:\n1. Check if it mentions missing FK (e.g., 'PatNum is required')\n2. If FK is missing, try automatic lookup ONCE\n3. If lookup fails, STOP and ASK user clearly\n4. DO NOT retry the same failed call multiple times\n5. DO NOT guess or use 0 for foreign keys\n\n### Field Validation\n- Phone numbers: Auto-cleaned to 10 digits (remove formatting)\n- Dates: Must be YYYY-MM-DD format\n- DateTimes: Must be YYYY-MM-DD HH:MM:SS format\n- Future appointments: AptDateTime must be today or future\n- Past appointments: Only for lookups, not creation\n\n### Common Enum Values\n- appointment.AptStatus: Valid values are [.]"
+}

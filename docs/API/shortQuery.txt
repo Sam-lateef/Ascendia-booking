@@ -1,0 +1,98 @@
+﻿* MISC 
+   * List doctors 
+      * SELECT o.ClinicNum, o.IsHygiene, o.operatoryType, o.OperatoryType, o.OperatoryNum, o.OpName AS OperatoryName, o.IsHygiene as HygieneProvider, d.ItemName, COALESCE(d.ItemName, 'General') AS Specialization  FROM operatory o LEFT JOIN definition d ON o.OperatoryType = d.DefNum AND d.Category = 55  LEFT JOIN clinic c ON o.ClinicNum = c.ClinicNum WHERE o.IsHidden <> 1
+   * Get doctor appointment 
+      * SELECT AptDateTime, OpName from appointment ap inner join operatory op on op.OperatoryNum = ap.op where opname like '%{{ $json.body.args.operatorname }}%'
+
+
+* Check_availability
+   * check_availability_POST 
+      * PUT: https://api.opendental.com/api/v1/queries/ShortQuery
+      * SELECT AptDateTime FROM appointment INNER JOIN patient ON patient.PatNum = appointment.PatNum WHERE AptDateTime between '${startSql}' and '${endSql}'
+         * Requested date or datetime 
+         * Requested date or datetime +30 
+
+
+* Update_appointments
+   * Get_patient_appointments_list
+      * PUT: https://api.opendental.com/api/v1/queries/ShortQuery
+      * SELECT  AptNum, patient.PatNum, AptDateTime FROM appointment INNER JOIN patient ON patient.PatNum = appointment.PatNum WHERE 
+      *  OR (HmPhone='${phone}' OR WkPhone='${phone}' OR WirelessPhone='${phone} <- phone columns 
+      * Fname,lname,phone,email
+
+
+   * Update_single_appointment_status
+      * PUT: https://api.opendental.com/api/v1/queries/ShortQuery 
+      * SELECT AptNum, AptDateTime FROM appointment INNER JOIN patient ON patient.PatNum = appointment.PatNum WHERE AptDateTime between '${date_time_start}' and '${date_time_end}'
+      * Same thing date or datetime, and datetimeend is +30mins 
+      * Check_for_patient_previous_appointments
+      * Get AptStatus
+         * POST: https://api.opendental.com/api/v1/appointments/{{ $('get_specific_appointment').item.json.AptNum }}
+      * Update appointment status
+         * POST: https://api.opendental.com/api/v1/appointments/{{ $('get_specific_appointment').item.json.AptNum }} 
+* booking
+   * Get_patient_appointments
+      * SELECT pt.AptNum, p.PatNum, pt.AptDateTime, p.MiddleI from appointment pt inner join patient p on p.patnum = pt.patnum where 
+         * if (allData.firstname) select += `fname='${allData.firstname}' and `;
+         * if (allData.lastname) select += `lname='${allData.lastname}' and `;
+         * if (allData.email) select += `email='${allData.email}' and `;
+         * if (select.endsWith(" and ")) select = select.slice(0, -5);
+         * if (allData.phone)
+         *     select += ` OR (HmPhone='${allData.phone}' OR WkPhone='${allData.phone}' OR WirelessPhone='${allData.phone}')`;
+   * get_patient_appointments- 
+         * PUT: https://api.opendental.com/api/v1/queries/ShortQuery 
+
+
+   * Check_for_appointment_by_date
+      * SELECT AptNum, AptDateTime FROM appointment INNER JOIN patient ON patient.PatNum = appointment.PatNum WHERE AptDateTime between '${date_time}' and '${`${addedDate}${tz}`.replace('Z', '').replace('T', ' ').replace('.000', '')}'
+      * PUT: https://api.opendental.com/api/v1/queries/ShortQuery 
+
+
+   * Book_new_appointment
+      * SELECT ap.AptDateTime, op.OperatoryNum, op.OpName FROM appointment ap INNER JOIN operatory op ON op.OperatoryNum = ap.Op INNER JOIN patient pt ON pt.PatNum = ap.PatNum WHERE ap.AptDateTime BETWEEN '${date_time}' and '${`${addedDate}${tz}`.replace("Z", "").replace("T", " ").replace(".000", "")}'
+      * if (allData.firstname) select += `fname='${allData.firstname}' and `;
+      * if (allData.lastname) select += `lname='${allData.lastname}' and `;
+      * if (allData.email) select += `email='${allData.email}' and `;
+      * if (allData.operator) sqlCommand += `and op.opname like '%${allData.operator}%'`;
+      * if (select.endsWith(" and ")) select = select.slice(0, -5);
+      *       * if (allData.phone)
+      *     select += ` OR (HmPhone='${allData.phone}' OR WkPhone='${allData.phone}' OR WirelessPhone='${allData.phone}')`;
+   * Detect_conflicting_apts
+      * PUT: https://api.opendental.com/api/v1/queries/ShortQuery
+* Personal information
+   *    * Get_patient_info_by_phone
+      * "SELECT PatNum, Salutation, LName, FName FROM patient WHERE HmPhone='${updateData}' OR WkPhone='${updateData}' OR WirelessPhone='${updateData}'
+      * PUT: https://api.opendental.com/api/v1/queries/ShortQuery
+
+
+   * Get_patient_information
+      * SELECT PatNum, LName, FName, MiddleI, Preferred, PatStatus, Gender, Position, Birthdate, City, State, Zip, HmPhone, WkPhone, WirelessPhone, Email, CreditType, Guarantor, Salutation, EstBalance, PriProv, SecProv, FeeSched, BillingType, MedicaidID, County, GradeLevel, Urgency, DateFirstVisit, Language, AdmitDate, Title, DateTStamp, CanadianEligibilityCode, AskToArriveEarly, PreferContactConfidential, SuperFamily, Country FROM patient WHERE if (updateData.firstname) {
+      *   selector += `fname='${updateData.firstname}' AND `;
+      * }
+      * if (updateData.lastname) {
+      *   selector += `lname='${updateData.lastname}' AND `;
+      * }
+      * if (updateData.email) {
+      *   selector += `email='${updateData.email}' AND `;
+      * }
+      * if (selector.endsWith(" AND ")) {
+      *   selector = selector.slice(0, -5);
+      * } else if (selector.endsWith(" ")) {
+      *   selector = selector.trim();
+      * }
+      * if (updateData.phone) {
+      *   const phone = updateData.phone;
+      *   if (selector.length > 0) {
+      *     selector += ` OR (HmPhone='${phone}' OR WkPhone='${phone}' OR WirelessPhone='${phone}')`;
+      *   } else {
+      *     selector += `(HmPhone='${phone}' OR WkPhone='${phone}' OR WirelessPhone='${phone}')`;
+      *   }
+      * }
+      * // Remove any trailing 'AND' or 'OR' from selector
+      * selector = selector.replace(/(AND|OR)\s*$/, "").trim();
+      * PUT: https://api.opendental.com/api/v1/queries/ShortQuery        
+
+
+   * Register_new_patient
+      * POST: https://api.opendental.com/api/v1/patients 
+      * Fnam,lname, wirelessphone
