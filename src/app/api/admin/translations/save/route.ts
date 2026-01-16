@@ -1,10 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentOrganization } from '@/app/lib/apiHelpers';
 import fs from 'fs/promises';
 import path from 'path';
 
 export async function POST(request: NextRequest) {
   try {
-    const { locale, messages, context } = await request.json();
+    // Verify authentication (translations are global, but require auth)
+    const context = await getCurrentOrganization(request);
+    
+    // Only owners and admins can modify translations
+    if (!['owner', 'admin'].includes(context.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Permission denied' },
+        { status: 403 }
+      );
+    }
+    
+    const { locale, messages, context: translationContext } = await request.json();
 
     if (!locale || !messages) {
       return NextResponse.json(
@@ -46,7 +58,7 @@ export async function POST(request: NextRequest) {
     console.log(`[Save Translations] Saved translations for locale: ${locale}`);
 
     // Save context if provided
-    if (context) {
+    if (translationContext) {
       const contextPath = path.join(messagesDir, 'context.json');
       try {
         await fs.access(contextPath);
@@ -56,7 +68,7 @@ export async function POST(request: NextRequest) {
         // Context file doesn't exist, no backup needed
       }
 
-      await fs.writeFile(contextPath, JSON.stringify(context, null, 2), 'utf-8');
+      await fs.writeFile(contextPath, JSON.stringify(translationContext, null, 2), 'utf-8');
       console.log('[Save Translations] Updated context file');
     }
 

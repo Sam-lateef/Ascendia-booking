@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentOrganization } from '@/app/lib/apiHelpers';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -195,6 +196,16 @@ function extractHardcodedText(content: string, filePath: string): HardcodedText[
 
 export async function GET(request: NextRequest) {
   try {
+    // Verify authentication (only admins can scan)
+    const context = await getCurrentOrganization(request);
+    
+    if (!['owner', 'admin'].includes(context.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Permission denied' },
+        { status: 403 }
+      );
+    }
+    
     const srcDir = path.join(process.cwd(), 'src');
     
     console.log('[Hardcoded Scanner] Scanning for hardcoded text in TSX files...');

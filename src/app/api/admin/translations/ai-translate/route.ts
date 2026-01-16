@@ -1,7 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentOrganization } from '@/app/lib/apiHelpers';
 import OpenAI from 'openai';
 
 export async function POST(request: NextRequest) {
+  try {
+    // Verify authentication
+    const context = await getCurrentOrganization(request);
+    if (!['owner', 'admin'].includes(context.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Permission denied' },
+        { status: 403 }
+      );
+    }
+  } catch (error: any) {
+    return NextResponse.json(
+      { success: false, error: 'Authentication required' },
+      { status: 401 }
+    );
+  }
+  
   // Initialize OpenAI at runtime, not at module load time
   const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,

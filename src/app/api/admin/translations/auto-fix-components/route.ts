@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentOrganization } from '@/app/lib/apiHelpers';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -25,6 +26,15 @@ interface FileModification {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Verify authentication
+    const context = await getCurrentOrganization(request);
+    if (!['owner', 'admin'].includes(context.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Permission denied' },
+        { status: 403 }
+      );
+    }
+    
     const { hardcodedTexts, dryRun = false } = await request.json();
 
     if (!hardcodedTexts || !Array.isArray(hardcodedTexts)) {

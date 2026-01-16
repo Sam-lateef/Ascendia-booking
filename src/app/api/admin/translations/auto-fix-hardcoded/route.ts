@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentOrganization } from '@/app/lib/apiHelpers';
 import fs from 'fs/promises';
 import path from 'path';
 
@@ -16,6 +17,15 @@ interface HardcodedText {
  */
 export async function POST(request: NextRequest) {
   try {
+    // Verify authentication
+    const context = await getCurrentOrganization(request);
+    if (!['owner', 'admin'].includes(context.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Permission denied' },
+        { status: 403 }
+      );
+    }
+    
     const { hardcodedTexts } = await request.json();
 
     if (!hardcodedTexts || !Array.isArray(hardcodedTexts)) {
@@ -124,6 +134,15 @@ export async function POST(request: NextRequest) {
  */
 export async function GET(request: NextRequest) {
   try {
+    // Verify authentication
+    const context = await getCurrentOrganization(request);
+    if (!['owner', 'admin'].includes(context.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Permission denied' },
+        { status: 403 }
+      );
+    }
+    
     const { searchParams } = new URL(request.url);
     const file = searchParams.get('file');
 
