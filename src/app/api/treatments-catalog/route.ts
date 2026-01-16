@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/app/lib/db';
+import { getCurrentOrganization } from '@/app/lib/apiHelpers';
+import { getSupabaseWithOrg } from '@/app/lib/supabaseClient';
 
 export interface TreatmentCatalogItem {
   id?: string;
@@ -19,6 +20,10 @@ export interface TreatmentCatalogItem {
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
+    // Get organization context
+    const context = await getCurrentOrganization(request);
+    const db = await getSupabaseWithOrg(context.organizationId);
+    
     const { searchParams } = new URL(request.url);
     const activeOnly = searchParams.get('activeOnly') === 'true';
     const category = searchParams.get('category');
@@ -59,6 +64,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    // Get organization context
+    const context = await getCurrentOrganization(request);
+    const db = await getSupabaseWithOrg(context.organizationId);
+    
     const body: TreatmentCatalogItem = await request.json();
 
     // Validate required fields
@@ -114,6 +123,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
  */
 export async function PUT(request: NextRequest): Promise<NextResponse> {
   try {
+    // Get organization context
+    const context = await getCurrentOrganization(request);
+    const db = await getSupabaseWithOrg(context.organizationId);
+    
     const body: TreatmentCatalogItem = await request.json();
 
     if (!body.id) {
@@ -163,6 +176,10 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
  */
 export async function DELETE(request: NextRequest): Promise<NextResponse> {
   try {
+    // Get organization context
+    const context = await getCurrentOrganization(request);
+    const db = await getSupabaseWithOrg(context.organizationId);
+    
     const { searchParams } = new URL(request.url);
     const id = searchParams.get('id');
 

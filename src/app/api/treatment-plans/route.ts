@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/app/lib/db';
+import { getCurrentOrganization } from '@/app/lib/apiHelpers';
+import { getSupabaseWithOrg } from '@/app/lib/supabaseClient';
 
 export interface TreatmentPlanItem {
   toothFdi: string;
@@ -30,6 +31,10 @@ export interface TreatmentPlan {
  */
 export async function POST(request: NextRequest): Promise<NextResponse> {
   try {
+    // Get organization context
+    const context = await getCurrentOrganization(request);
+    const db = await getSupabaseWithOrg(context.organizationId);
+    
     const body: TreatmentPlan = await request.json();
 
     // Validate required fields
@@ -118,6 +123,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
  */
 export async function GET(request: NextRequest): Promise<NextResponse> {
   try {
+    // Get organization context
+    const context = await getCurrentOrganization(request);
+    const db = await getSupabaseWithOrg(context.organizationId);
+    
     const { searchParams } = new URL(request.url);
     const patientId = searchParams.get('patientId');
 
