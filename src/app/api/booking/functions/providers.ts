@@ -1,14 +1,15 @@
 // @ts-nocheck
 /**
  * Provider Management Functions
+ * Updated for multi-tenancy - accepts org-scoped database client
  */
 
-import { db } from '@/app/lib/db';
+import { db as defaultDb } from '@/app/lib/db';
 
 /**
  * Get all active providers with their schedules
  */
-export async function GetProviders(parameters: Record<string, any> = {}): Promise<any[]> {
+export async function GetProviders(parameters: Record<string, any> = {}, db: any = defaultDb): Promise<any[]> {
   const { data: providers, error } = await db
     .from('providers')
     .select('*')
@@ -36,7 +37,7 @@ export async function GetProviders(parameters: Record<string, any> = {}): Promis
 /**
  * Get single provider by ID
  */
-export async function GetProvider(parameters: Record<string, any>): Promise<any> {
+export async function GetProvider(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { ProvNum, id } = parameters;
   const providerId = ProvNum || id;
   
@@ -68,7 +69,7 @@ export async function GetProvider(parameters: Record<string, any>): Promise<any>
 /**
  * Create new provider
  */
-export async function CreateProvider(parameters: Record<string, any>): Promise<any> {
+export async function CreateProvider(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { FName, LName, first_name, last_name, specialty_tags, Specialty, is_active } = parameters;
   
   // Support both OpenDental format (FName, LName) and admin UI format (first_name, last_name)
@@ -116,7 +117,7 @@ export async function CreateProvider(parameters: Record<string, any>): Promise<a
 /**
  * Update provider
  */
-export async function UpdateProvider(parameters: Record<string, any>): Promise<any> {
+export async function UpdateProvider(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { ProvNum, id, FName, LName, first_name, last_name, specialty_tags, Specialty, is_active } = parameters;
   const providerId = ProvNum || id;
   
@@ -183,7 +184,7 @@ export async function UpdateProvider(parameters: Record<string, any>): Promise<a
 /**
  * Delete provider (soft delete by setting is_active to false)
  */
-export async function DeleteProvider(parameters: Record<string, any>): Promise<any> {
+export async function DeleteProvider(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { ProvNum, id } = parameters;
   const providerId = ProvNum || id;
   

@@ -3,12 +3,12 @@
  * Operatory Management Functions
  */
 
-import { db } from '@/app/lib/db';
+import { db as defaultDb } from '@/app/lib/db';
 
 /**
  * Get all active operatories
  */
-export async function GetOperatories(parameters: Record<string, any> = {}): Promise<any[]> {
+export async function GetOperatories(parameters: Record<string, any> = {}, db: any = defaultDb): Promise<any[]> {
   const { data: operatories, error } = await db
     .from('operatories')
     .select('*')
@@ -35,7 +35,7 @@ export async function GetOperatories(parameters: Record<string, any> = {}): Prom
 /**
  * Get single operatory by ID
  */
-export async function GetOperatory(parameters: Record<string, any>): Promise<any> {
+export async function GetOperatory(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { OperatoryNum, OpNum, id } = parameters;
   const operatoryId = OperatoryNum || OpNum || id;
   
@@ -68,7 +68,7 @@ export async function GetOperatory(parameters: Record<string, any>): Promise<any
 /**
  * Create new operatory
  */
-export async function CreateOperatory(parameters: Record<string, any>): Promise<any> {
+export async function CreateOperatory(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { OpName, name, tags, IsHygiene, isHygiene, is_active } = parameters;
   
   // Support both OpenDental format (OpName) and admin UI format (name)
@@ -118,7 +118,7 @@ export async function CreateOperatory(parameters: Record<string, any>): Promise<
 /**
  * Update operatory
  */
-export async function UpdateOperatory(parameters: Record<string, any>): Promise<any> {
+export async function UpdateOperatory(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { OperatoryNum, OpNum, id, OpName, name, tags, IsHygiene, isHygiene, is_active } = parameters;
   const operatoryId = OperatoryNum || OpNum || id;
   
@@ -194,7 +194,7 @@ export async function UpdateOperatory(parameters: Record<string, any>): Promise<
 /**
  * Delete operatory (soft delete by setting is_active to false)
  */
-export async function DeleteOperatory(parameters: Record<string, any>): Promise<any> {
+export async function DeleteOperatory(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { OperatoryNum, OpNum, id } = parameters;
   const operatoryId = OperatoryNum || OpNum || id;
   

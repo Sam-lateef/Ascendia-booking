@@ -14,6 +14,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/app/lib/db';
+import { getCurrentOrganization } from '@/app/lib/apiHelpers';
+import { getSupabaseWithOrg } from '@/app/lib/supabaseClient';
 import * as bookingFunctions from './functions';
 import { 
   getAutoFilledParameters, 
@@ -286,6 +288,11 @@ function validateParameters(
 
 export async function POST(req: NextRequest) {
   try {
+    // Get organization context for multi-tenancy
+    const context = await getCurrentOrganization(req);
+    const orgDb = await getSupabaseWithOrg(context.organizationId);
+    console.log(`[Booking API] Request from org: ${context.organizationId}, user: ${context.user.id}`);
+    
     const body = await req.json();
     console.log('[Booking API] Received request:', body);
     
@@ -480,8 +487,8 @@ export async function POST(req: NextRequest) {
       // SONNET VALIDATION REMOVED
       // TODO: Implement LLM-based validation layer later
       
-      // Execute the handler function with validated parameters
-      const result = await handler(validatedParams);
+      // Execute the handler function with validated parameters and org-scoped database
+      const result = await handler(validatedParams, orgDb);
       
       // Record successful call in conversation state
       if (sessionId) {

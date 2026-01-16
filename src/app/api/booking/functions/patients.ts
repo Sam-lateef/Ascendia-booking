@@ -1,14 +1,15 @@
 // @ts-nocheck
 /**
  * Patient Management Functions
+ * Updated for multi-tenancy - accepts org-scoped database client
  */
 
-import { db } from '@/app/lib/db';
+import { db as defaultDb } from '@/app/lib/db';
 
 /**
  * Get all patients (for admin/dashboard use)
  */
-export async function GetAllPatients(): Promise<any[]> {
+export async function GetAllPatients(parameters: Record<string, any> = {}, db: any = defaultDb): Promise<any[]> {
   const { data, error } = await db
     .from('patients')
     .select('*')
@@ -38,7 +39,7 @@ export async function GetAllPatients(): Promise<any[]> {
  * Search for patients by name or phone
  * Matches OpenDental GetMultiplePatients API
  */
-export async function GetMultiplePatients(parameters: Record<string, any>): Promise<any[]> {
+export async function GetMultiplePatients(parameters: Record<string, any>, db: any = defaultDb): Promise<any[]> {
   const { LName, FName, Phone } = parameters;
   
   let query = db.from('patients').select('*');
@@ -82,7 +83,7 @@ export async function GetMultiplePatients(parameters: Record<string, any>): Prom
 /**
  * Get single patient by ID
  */
-export async function GetPatient(parameters: Record<string, any>): Promise<any> {
+export async function GetPatient(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { PatNum, id } = parameters;
   const patientId = PatNum || id;
   
@@ -116,7 +117,7 @@ export async function GetPatient(parameters: Record<string, any>): Promise<any> 
  * Create new patient
  * Required: FName, LName, Birthdate, WirelessPhone
  */
-export async function CreatePatient(parameters: Record<string, any>): Promise<any> {
+export async function CreatePatient(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { FName, LName, Birthdate, WirelessPhone, Email } = parameters || {};
   
   // Collect all missing required parameters
@@ -195,7 +196,7 @@ export async function CreatePatient(parameters: Record<string, any>): Promise<an
 /**
  * Update patient information
  */
-export async function UpdatePatient(parameters: Record<string, any>): Promise<any> {
+export async function UpdatePatient(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { PatNum, id, FName, LName, Birthdate, WirelessPhone, Email } = parameters;
   const patientId = PatNum || id;
   
@@ -245,7 +246,7 @@ export async function UpdatePatient(parameters: Record<string, any>): Promise<an
  * Delete patient
  * Note: This will cascade delete all related appointments
  */
-export async function DeletePatient(parameters: Record<string, any>): Promise<any> {
+export async function DeletePatient(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { PatNum, id } = parameters;
   const patientId = PatNum || id;
   

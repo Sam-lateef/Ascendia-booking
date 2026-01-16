@@ -10,7 +10,7 @@
  * - No provider can be in two operatories at overlapping times
  */
 
-import { db } from '@/app/lib/db';
+import { db as defaultDb } from '@/app/lib/db';
 
 /**
  * Check for schedule conflicts
@@ -104,7 +104,7 @@ async function checkScheduleConflicts(
 /**
  * Get all schedules with optional filters
  */
-export async function GetSchedules(parameters: Record<string, any> = {}): Promise<any[]> {
+export async function GetSchedules(parameters: Record<string, any> = {}, db: any = defaultDb): Promise<any[]> {
   let query = (db as any).from('provider_schedules').select('*, providers(*), operatories(*)');
   
   if (parameters.ProvNum || parameters.provider_id) {
@@ -158,7 +158,7 @@ export async function GetSchedules(parameters: Record<string, any> = {}): Promis
 /**
  * Get a single schedule by ID
  */
-export async function GetSchedule(parameters: Record<string, any>): Promise<any> {
+export async function GetSchedule(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { ScheduleNum, id } = parameters;
   const scheduleId = ScheduleNum || id;
   
@@ -198,7 +198,7 @@ export async function GetSchedule(parameters: Record<string, any>): Promise<any>
 /**
  * Create a new schedule
  */
-export async function CreateSchedule(parameters: Record<string, any>): Promise<any> {
+export async function CreateSchedule(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { 
     ProvNum, 
     provider_id,
@@ -308,7 +308,7 @@ export async function CreateSchedule(parameters: Record<string, any>): Promise<a
 /**
  * Update an existing schedule
  */
-export async function UpdateSchedule(parameters: Record<string, any>): Promise<any> {
+export async function UpdateSchedule(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { ScheduleNum, id, ...updates } = parameters;
   const scheduleId = ScheduleNum || id;
   
@@ -406,7 +406,7 @@ export async function UpdateSchedule(parameters: Record<string, any>): Promise<a
 /**
  * Delete a schedule
  */
-export async function DeleteSchedule(parameters: Record<string, any>): Promise<{ success: boolean; message: string }> {
+export async function DeleteSchedule(parameters: Record<string, any>, db: any = defaultDb): Promise<{ success: boolean; message: string }> {
   const { ScheduleNum, id } = parameters;
   const scheduleId = ScheduleNum || id;
   
@@ -432,7 +432,7 @@ export async function DeleteSchedule(parameters: Record<string, any>): Promise<{
 /**
  * Get schedules for a specific provider
  */
-export async function GetProviderSchedules(parameters: Record<string, any>): Promise<any[]> {
+export async function GetProviderSchedules(parameters: Record<string, any>, db: any = defaultDb): Promise<any[]> {
   const { ProvNum, provider_id, DateStart, DateEnd } = parameters;
   const providerId = ProvNum || provider_id;
   
@@ -451,7 +451,7 @@ export async function GetProviderSchedules(parameters: Record<string, any>): Pro
  * Bulk create schedules for a date range (Mon-Fri or all days)
  * Creates schedules for each day in the range
  */
-export async function CreateDefaultSchedules(parameters: Record<string, any>): Promise<any[]> {
+export async function CreateDefaultSchedules(parameters: Record<string, any>, db: any = defaultDb): Promise<any[]> {
   const { 
     ProvNum, 
     provider_id,
@@ -544,7 +544,7 @@ export async function CreateDefaultSchedules(parameters: Record<string, any>): P
 /**
  * Check for conflicts without creating
  */
-export async function CheckScheduleConflicts(parameters: Record<string, any>): Promise<any> {
+export async function CheckScheduleConflicts(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { 
     ProvNum, 
     provider_id,

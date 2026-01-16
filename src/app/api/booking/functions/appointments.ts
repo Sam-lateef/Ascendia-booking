@@ -3,14 +3,14 @@
  * Appointment Management Functions
  */
 
-import { db } from '@/app/lib/db';
+import { db as defaultDb } from '@/app/lib/db';
 import { openDentalConfig } from '@/app/agentConfigs/openDental/config';
 
 /**
  * Get appointments with filters
  * Supports: PatNum, DateStart, DateEnd, ProvNum, OpNum, status
  */
-export async function GetAppointments(parameters: Record<string, any>): Promise<any[]> {
+export async function GetAppointments(parameters: Record<string, any>, db: any = defaultDb): Promise<any[]> {
   let query = db.from('appointments').select('*, patients(*), providers(*), operatories(*)');
   
   // Apply filters
@@ -90,7 +90,7 @@ export async function GetAppointments(parameters: Record<string, any>): Promise<
  * 2. Gets existing appointments
  * 3. Calculates available 30-minute slots
  */
-export async function GetAvailableSlots(parameters: Record<string, any>): Promise<any[]> {
+export async function GetAvailableSlots(parameters: Record<string, any>, db: any = defaultDb): Promise<any[]> {
   const { dateStart, dateEnd, ProvNum, OpNum, lengthMinutes = 30, searchAll = false } = parameters || {};
   
   // Only dateStart and dateEnd are truly required
@@ -360,7 +360,7 @@ export async function GetAvailableSlots(parameters: Record<string, any>): Promis
 /**
  * Create new appointment
  */
-export async function CreateAppointment(parameters: Record<string, any>): Promise<any> {
+export async function CreateAppointment(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { PatNum, AptDateTime, Op, ProvNum, Note, Pattern, IsHygiene, AptStatus = 'Scheduled' } = parameters;
   
   // Validate required fields
@@ -442,7 +442,7 @@ export async function CreateAppointment(parameters: Record<string, any>): Promis
 /**
  * Update appointment
  */
-export async function UpdateAppointment(parameters: Record<string, any>): Promise<any> {
+export async function UpdateAppointment(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { AptNum, AppointmentId, AptDateTime, Op, ProvNum, AptStatus, Note } = parameters;
   const appointmentId = AptNum || AppointmentId;
   
@@ -533,7 +533,7 @@ export async function UpdateAppointment(parameters: Record<string, any>): Promis
 /**
  * Break/Cancel appointment
  */
-export async function BreakAppointment(parameters: Record<string, any>): Promise<any> {
+export async function BreakAppointment(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { AptNum, sendToUnscheduledList = true } = parameters;
   
   if (!AptNum) {
@@ -583,7 +583,7 @@ export async function BreakAppointment(parameters: Record<string, any>): Promise
 /**
  * Delete appointment permanently
  */
-export async function DeleteAppointment(parameters: Record<string, any>): Promise<any> {
+export async function DeleteAppointment(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
   const { AptNum } = parameters;
   
   if (!AptNum) {
