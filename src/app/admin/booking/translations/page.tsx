@@ -15,12 +15,41 @@ import {
 import { Input } from '@/components/ui/input';
 import { useTranslations } from '@/lib/i18n/TranslationProvider';
 import { SUPPORTED_LANGUAGES } from '@/lib/languages';
-import { Loader2, Search, Globe, Save, Wand2 } from 'lucide-react';
+import { 
+  Loader2, 
+  Search, 
+  Globe, 
+  Save, 
+  Wand2, 
+  ScanSearch, 
+  AlertTriangle, 
+  CheckCircle2,
+  Plus,
+  FileCode,
+  ChevronDown,
+  ChevronRight
+} from 'lucide-react';
 
 interface TranslationEntry {
   key: string;
   english: string;
   translated: string;
+}
+
+interface ScannedKey {
+  key: string;
+  section: string;
+  fullKey: string;
+  files: string[];
+}
+
+interface ScanResult {
+  success: boolean;
+  scannedKeys: ScannedKey[];
+  missingKeys: string[];
+  existingKeys: string[];
+  totalFilesScanned: number;
+  error?: string;
 }
 
 export default function TranslationsPage() {
@@ -35,6 +64,14 @@ export default function TranslationsPage() {
   const [translating, setTranslating] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Scanner state
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [showScanResults, setShowScanResults] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [missingKeyPlaceholders, setMissingKeyPlaceholders] = useState<Record<string, string>>({});
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
 
   // Load context and existing translations
   useEffect(() => {
@@ -246,12 +283,301 @@ export default function TranslationsPage() {
     );
   };
 
+  // Scanner functions
+  const handleScanCodebase = async () => {
+    setScanning(true);
+    setMessage(null);
+    setScanResult(null);
+
+    try {
+      const response = await fetch('/api/admin/translations/scan');
+      const data: ScanResult = await response.json();
+
+      if (data.success) {
+        setScanResult(data);
+        setShowScanResults(true);
+        
+        // Initialize placeholders for missing keys
+        const placeholders: Record<string, string> = {};
+        for (const key of data.missingKeys) {
+          const parts = key.split('.');
+          const leafKey = parts[parts.length - 1];
+          placeholders[key] = generatePlaceholder(leafKey);
+        }
+        setMissingKeyPlaceholders(placeholders);
+        
+        if (data.missingKeys.length === 0) {
+          setMessage({ type: 'success', text: `✅ All ${data.scannedKeys.length} keys are in sync! Scanned ${data.totalFilesScanned} files.` });
+        } else {
+          setMessage({ 
+            type: 'error', 
+            text: `⚠️ Found ${data.missingKeys.length} missing keys in ${data.totalFilesScanned} files` 
+          });
+        }
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to scan codebase' });
+      }
+    } catch (error) {
+      console.error('Scan error:', error);
+      setMessage({ type: 'error', text: 'Failed to scan codebase' });
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const handleSyncMissingKeys = async () => {
+    if (!scanResult?.missingKeys.length) return;
+
+    setSyncing(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch('/api/admin/translations/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          missingKeys: scanResult.missingKeys,
+          placeholders: missingKeyPlaceholders,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setMessage({ type: 'success', text: `✅ ${data.message}` });
+        // Reload translations to show new keys
+        await loadTranslations(targetLanguage);
+        // Re-scan to update the missing keys list
+        await handleScanCodebase();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to sync keys' });
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+      setMessage({ type: 'error', text: 'Failed to sync keys' });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const generatePlaceholder = (key: string): string => {
+    return key
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/[_-]/g, ' ')
+      .replace(/^\s+/, '')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+  const updatePlaceholder = (fullKey: string, value: string) => {
+    setMissingKeyPlaceholders(prev => ({
+      ...prev,
+      [fullKey]: value,
+    }));
+  };
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(section)) {
+        next.delete(section);
+      } else {
+        next.add(section);
+      }
+      return next;
+    });
+  };
+
+  // Group missing keys by section
+  const getMissingKeysBySection = () => {
+    if (!scanResult?.missingKeys) return {};
+    
+    const grouped: Record<string, string[]> = {};
+    for (const key of scanResult.missingKeys) {
+      const section = key.split('.')[0];
+      if (!grouped[section]) {
+        grouped[section] = [];
+      }
+      grouped[section].push(key);
+    }
+    return grouped;
+  };
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">{t('title')}</h1>
-        <p className="text-gray-600 mt-2">{t('subtitle')}</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">{t('title')}</h1>
+            <p className="text-gray-600 mt-2">{t('subtitle')}</p>
+          </div>
+          <a
+            href="/admin/booking/translations/hardcoded"
+            className="flex items-center gap-2 px-4 py-2 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded-lg transition-colors text-sm font-medium"
+          >
+            <AlertTriangle className="h-4 w-4" />
+            Find Hardcoded Text
+          </a>
+        </div>
       </div>
+
+      {/* Scanner Card - NEW */}
+      <Card className="border-2 border-blue-200 bg-blue-50/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-blue-800">
+            <ScanSearch className="h-5 w-5" />
+            Code Scanner
+          </CardTitle>
+          <CardDescription className="text-blue-700">
+            Scan your codebase to find all translation keys and detect missing entries in en.json
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handleScanCodebase}
+              disabled={scanning}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {scanning ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Scanning...
+                </>
+              ) : (
+                <>
+                  <ScanSearch className="mr-2 h-4 w-4" />
+                  Scan Codebase
+                </>
+              )}
+            </Button>
+
+            {scanResult && scanResult.missingKeys.length > 0 && (
+              <Button
+                onClick={handleSyncMissingKeys}
+                disabled={syncing}
+                className="bg-orange-600 hover:bg-orange-700"
+              >
+                {syncing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add {scanResult.missingKeys.length} Missing Keys
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+
+          {/* Scan Results Summary */}
+          {scanResult && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+              <div className="bg-white rounded-lg p-3 border">
+                <div className="text-2xl font-bold text-gray-900">{scanResult.totalFilesScanned}</div>
+                <div className="text-sm text-gray-500">{tCommon('files_scanned')}</div>
+              </div>
+              <div className="bg-white rounded-lg p-3 border">
+                <div className="text-2xl font-bold text-gray-900">{scanResult.scannedKeys.length}</div>
+                <div className="text-sm text-gray-500">{tCommon('keys_found')}</div>
+              </div>
+              <div className="bg-white rounded-lg p-3 border">
+                <div className="text-2xl font-bold text-green-600">{scanResult.existingKeys.length}</div>
+                <div className="text-sm text-gray-500">{tCommon('in_enjson')}</div>
+              </div>
+              <div className={`bg-white rounded-lg p-3 border ${scanResult.missingKeys.length > 0 ? 'border-orange-300 bg-orange-50' : ''}`}>
+                <div className={`text-2xl font-bold ${scanResult.missingKeys.length > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                  {scanResult.missingKeys.length}
+                </div>
+                <div className="text-sm text-gray-500">{tCommon('missing_keys')}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Missing Keys Details */}
+          {scanResult && scanResult.missingKeys.length > 0 && showScanResults && (
+            <div className="mt-4 bg-white rounded-lg border">
+              <div className="p-3 border-b bg-orange-50 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-orange-800 font-medium">
+                  <AlertTriangle className="h-4 w-4" />
+                  Missing Translation Keys
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowScanResults(false)}
+                  className="text-gray-500"
+                >
+                  Hide
+                </Button>
+              </div>
+              <div className="max-h-[400px] overflow-y-auto">
+                {Object.entries(getMissingKeysBySection()).map(([section, keys]) => (
+                  <div key={section} className="border-b last:border-b-0">
+                    <button
+                      onClick={() => toggleSection(section)}
+                      className="w-full px-4 py-2 flex items-center justify-between hover:bg-gray-50 text-left"
+                    >
+                      <div className="flex items-center gap-2">
+                        {expandedSections.has(section) ? (
+                          <ChevronDown className="h-4 w-4 text-gray-400" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-gray-400" />
+                        )}
+                        <span className="font-medium text-gray-700">{section}</span>
+                        <span className="text-sm text-orange-600 bg-orange-100 px-2 py-0.5 rounded">
+                          {keys.length} missing
+                        </span>
+                      </div>
+                    </button>
+                    {expandedSections.has(section) && (
+                      <div className="px-4 pb-3 space-y-2">
+                        {keys.map(fullKey => {
+                          const scannedKey = scanResult.scannedKeys.find(k => k.fullKey === fullKey);
+                          return (
+                            <div key={fullKey} className="bg-gray-50 rounded p-3">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1">
+                                  <code className="text-sm font-mono text-orange-700">{fullKey}</code>
+                                  {scannedKey && scannedKey.files.length > 0 && (
+                                    <div className="mt-1 flex items-center gap-1 text-xs text-gray-500">
+                                      <FileCode className="h-3 w-3" />
+                                      {scannedKey.files.slice(0, 2).join(', ')}
+                                      {scannedKey.files.length > 2 && ` +${scannedKey.files.length - 2} more`}
+                                    </div>
+                                  )}
+                                </div>
+                                <Input
+                                  value={missingKeyPlaceholders[fullKey] || ''}
+                                  onChange={(e) => updatePlaceholder(fullKey, e.target.value)}
+                                  placeholder={tCommon('english_text')}
+                                  className="w-64 text-sm"
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* All Synced Message */}
+          {scanResult && scanResult.missingKeys.length === 0 && (
+            <div className="flex items-center gap-2 text-green-700 bg-green-50 p-3 rounded-lg">
+              <CheckCircle2 className="h-5 w-5" />
+              <span>{tCommon('all_translation_keys_are_in_sy')}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Business Context Card */}
       <Card>
@@ -275,7 +601,7 @@ export default function TranslationsPage() {
       {/* Translation Controls */}
       <Card>
         <CardHeader>
-          <CardTitle>Translation Controls</CardTitle>
+          <CardTitle>{tCommon('translation_controls')}</CardTitle>
           <CardDescription>{t('tipAutoTranslate')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -412,4 +738,3 @@ export default function TranslationsPage() {
     </div>
   );
 }
-

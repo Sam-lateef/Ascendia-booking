@@ -44,6 +44,7 @@ interface Patient {
 }
 
 export default function AdminDashboard() {
+  const tCommon = useTranslations('common');
   const t = useTranslations('dashboard');
   const locale = useLocale();
   const [stats, setStats] = useState<DashboardStats>({
@@ -293,7 +294,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         <Link href="/admin/booking/appointments">
           <Card className="hover:shadow-lg transition-shadow cursor-pointer">
             <CardHeader>
@@ -326,6 +327,30 @@ export default function AdminDashboard() {
             <CardHeader>
               <CardTitle>{t('managePatients')}</CardTitle>
               <CardDescription>{t('viewRecords')}</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+
+        <Link href="/admin/booking/treatments">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-blue-200 bg-blue-50">
+            <CardHeader>
+              <CardTitle className="text-blue-700">{tCommon('treatment_plans')}</CardTitle>
+              <CardDescription>{tCommon('dental_chart_treatment_plannin')}</CardDescription>
+            </CardHeader>
+          </Card>
+        </Link>
+      </div>
+
+      {/* Admin Config Section */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <Link href="/admin/booking/treatments-config">
+          <Card className="hover:shadow-lg transition-shadow cursor-pointer border-purple-200 bg-purple-50">
+            <CardHeader>
+              <CardTitle className="text-purple-700 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+                Treatments Config
+              </CardTitle>
+              <CardDescription>{tCommon('manage_treatment_catalog_price')}</CardDescription>
             </CardHeader>
           </Card>
         </Link>

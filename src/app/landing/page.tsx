@@ -1,9 +1,12 @@
 "use client";
 
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
+
 import { useEffect, useState, useRef } from "react";
 import Script from "next/script";
 
 export default function LandingPage() {
+  const tCommon = useTranslations('common');
   const [displayedText, setDisplayedText] = useState("");
   const [isDeleting, setIsDeleting] = useState(false);
   const [phraseIndex, setPhraseIndex] = useState(0);
@@ -546,7 +549,7 @@ void main() {
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <input
                 type="email"
-                placeholder="tell me when its done"
+                placeholder={tCommon('tell_me_when_its_done')}
                 className="w-full px-6 py-4 text-center focus:outline-none transition-all"
                 style={{
                   background: 'rgba(45, 45, 45, 0.3)',

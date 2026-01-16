@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
+
 import React, { useEffect } from "react";
 
 export type ErrorType = 'openai_quota' | 'opendental_connection' | 'config' | 'api' | null;
@@ -10,6 +12,7 @@ interface ErrorNotificationProps {
 }
 
 export default function ErrorNotification({ errorType, onDismiss }: ErrorNotificationProps) {
+  const tCommon = useTranslations('common');
   useEffect(() => {
     if (errorType) {
       // Auto-dismiss after 10 seconds
@@ -83,7 +86,7 @@ export default function ErrorNotification({ errorType, onDismiss }: ErrorNotific
           onClick={onDismiss}
           className="ml-4 text-gray-400 hover:text-gray-600 transition-colors"
           style={{ color: "#9ca3af" }}
-          aria-label="Dismiss"
+          aria-label={tCommon('dismiss')}
         >
           <svg
             className="w-5 h-5"

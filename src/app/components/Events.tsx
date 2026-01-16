@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
+
 import React, { useRef, useEffect, useState } from "react";
 import { useEvent } from "@/app/contexts/EventContext";
 import { LoggedEvent } from "@/app/types";
@@ -9,6 +11,7 @@ export interface EventsProps {
 }
 
 function Events({ isExpanded }: EventsProps) {
+  const tCommon = useTranslations('common');
   const [prevEventLogs, setPrevEventLogs] = useState<LoggedEvent[]>([]);
   const eventLogsContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -43,7 +46,7 @@ function Events({ isExpanded }: EventsProps) {
       {isExpanded && (
         <div>
           <div className="flex items-center justify-between px-6 py-3.5 sticky top-0 z-10 text-base" style={{ borderBottom: '1px solid var(--border-gray)', background: 'var(--dark-4)', color: 'var(--text-gray)' }}>
-            <span className="font-semibold">Logs</span>
+            <span className="font-semibold">{tCommon('logs')}</span>
           </div>
           <div>
             {loggedEvents.map((log, idx) => {

@@ -131,7 +131,7 @@ export default function OperatoriesPage() {
   };
 
   if (loading) {
-    return <div className="text-center py-8">Loading operatories...</div>;
+    return <div className="text-center py-8">{tCommon('loading_operatories')}</div>;
   }
 
   return (
@@ -158,8 +158,8 @@ export default function OperatoriesPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Type</TableHead>
+              <TableHead>{tCommon('name')}</TableHead>
+              <TableHead>{tCommon('type')}</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -259,7 +259,7 @@ export default function OperatoriesPage() {
           <form action={handleSave}>
             <div className="grid gap-4 py-4">
               <div>
-                <Label htmlFor="name">Name</Label>
+                <Label htmlFor="name">{tCommon('name')}</Label>
                 <Input
                   id="name"
                   name="name"
@@ -269,7 +269,7 @@ export default function OperatoriesPage() {
               </div>
               <div className="flex items-center space-x-2">
                 <Checkbox id="isHygiene" name="isHygiene" defaultChecked={editingOperatory?.isHygiene} />
-                <Label htmlFor="isHygiene" className="cursor-pointer">Hygiene Operatory</Label>
+                <Label htmlFor="isHygiene" className="cursor-pointer">{tCommon('hygiene_operatory')}</Label>
               </div>
             </div>
             <DialogFooter>
@@ -283,7 +283,7 @@ export default function OperatoriesPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit">Save</Button>
+              <Button type="submit">{tCommon('save')}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

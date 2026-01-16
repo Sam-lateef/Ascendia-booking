@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
+
 import React, { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { TranscriptItem } from "@/app/types";
@@ -21,6 +23,7 @@ function MinimalTranscript({
   canSend,
   downloadRecording,
 }: MinimalTranscriptProps) {
+  const tCommon = useTranslations('common');
   const { transcriptItems } = useTranscript();
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -86,9 +89,9 @@ function MinimalTranscript({
           })}
         {transcriptItems.filter(item => !item.isHidden && item.type === "MESSAGE").length === 0 && (
           <div className="text-center mt-8" style={{ color: '#9ca3af' }}>
-            <div className="text-sm">Start a conversation...</div>
+            <div className="text-sm">{tCommon('start_a_conversation')}</div>
             {!canSend && (
-              <div className="text-xs mt-2 opacity-75">Connect to enable messaging</div>
+              <div className="text-xs mt-2 opacity-75">{tCommon('connect_to_enable_messaging')}</div>
             )}
           </div>
         )}
@@ -113,7 +116,7 @@ function MinimalTranscript({
             background: '#ffffff',
             fontSize: '16px' // Prevents zoom on iOS
           }}
-          placeholder="Type a message..."
+          placeholder={tCommon('type_a_message')}
           disabled={!canSend}
         />
         <button

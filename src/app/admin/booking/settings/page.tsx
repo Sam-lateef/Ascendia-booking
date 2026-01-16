@@ -237,7 +237,7 @@ export default function SettingsPage() {
               <SelectContent>
                 <SelectItem value="standard">
                   <div className="flex flex-col items-start">
-                    <span className="font-medium">Standard (Recommended)</span>
+                    <span className="font-medium">{tCommon('standard_recommended')}</span>
                     <span className="text-xs text-gray-500">
                       Cost Effective
                     </span>
@@ -245,7 +245,7 @@ export default function SettingsPage() {
                 </SelectItem>
                 <SelectItem value="premium">
                   <div className="flex flex-col items-start">
-                    <span className="font-medium">Premium</span>
+                    <span className="font-medium">{tCommon('premium')}</span>
                     <span className="text-xs text-gray-500">
                       Expensive
                     </span>
@@ -256,13 +256,13 @@ export default function SettingsPage() {
           </div>
 
           <div className="bg-gray-50 p-4 rounded-lg space-y-2 text-sm">
-            <div className="font-medium text-gray-900">How it works:</div>
+            <div className="font-medium text-gray-900">{tCommon('how_it_works')}</div>
             <ul className="space-y-1 text-gray-600 list-disc list-inside">
               <li>
-                <strong>Standard:</strong> Cost Effective - Optimized for best value
+                <strong>{tCommon('standard')}</strong> Cost Effective - Optimized for best value
               </li>
               <li>
-                <strong>Premium:</strong> Expensive - Maximum performance
+                <strong>{tCommon('premium')}</strong> Expensive - Maximum performance
               </li>
               <li>
                 Changes take effect immediately for new calls
@@ -325,7 +325,7 @@ export default function SettingsPage() {
           {!isUnlocked ? (
             <div className="space-y-4">
               <div className="space-y-3 max-w-md">
-                <Label htmlFor="password">🔒 Password Required</Label>
+                <Label htmlFor="password">{tCommon('password_required')}</Label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
                     <Input
@@ -334,7 +334,7 @@ export default function SettingsPage() {
                       value={passwordInput}
                       onChange={(e) => setPasswordInput(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
-                      placeholder="Enter password"
+                      placeholder={tCommon('enter_password')}
                       className={passwordError ? 'border-red-500' : ''}
                     />
                     <button
@@ -357,7 +357,7 @@ export default function SettingsPage() {
           ) : (
             <div className="space-y-6">
               {instructionsLoading ? (
-                <p>Loading...</p>
+                <p>{tCommon('loading')}</p>
               ) : (
                 <>
                   {/* Seed Instructions Button */}
@@ -389,13 +389,13 @@ export default function SettingsPage() {
                       <Label htmlFor="premium-instructions" className="text-base font-semibold">
                         Premium Configuration
                       </Label>
-                      <span className="text-xs text-gray-500 bg-purple-100 px-2 py-1 rounded">Single Agent</span>
+                      <span className="text-xs text-gray-500 bg-purple-100 px-2 py-1 rounded">{tCommon('single_agent')}</span>
                     </div>
                     <Textarea
                       id="premium-instructions"
                       value={premiumInstructions}
                       onChange={(e) => setPremiumInstructions(e.target.value)}
-                      placeholder="Configuration..."
+                      placeholder={tCommon('configuration')}
                       className="min-h-[200px] font-mono text-sm"
                     />
                   </div>
@@ -405,8 +405,8 @@ export default function SettingsPage() {
                   {/* Standard Mode Instructions */}
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
-                      <h3 className="text-base font-semibold">Standard Configuration</h3>
-                      <span className="text-xs text-gray-500 bg-blue-100 px-2 py-1 rounded">Two-Agent System</span>
+                      <h3 className="text-base font-semibold">{tCommon('standard_configuration')}</h3>
+                      <span className="text-xs text-gray-500 bg-blue-100 px-2 py-1 rounded">{tCommon('twoagent_system')}</span>
                     </div>
 
                     {/* Receptionist Instructions */}
@@ -418,7 +418,7 @@ export default function SettingsPage() {
                         id="receptionist-instructions"
                         value={receptionistInstructions}
                         onChange={(e) => setReceptionistInstructions(e.target.value)}
-                        placeholder="Configuration..."
+                        placeholder={tCommon('configuration')}
                         className="min-h-[200px] font-mono text-sm"
                       />
                     </div>
@@ -432,7 +432,7 @@ export default function SettingsPage() {
                         id="supervisor-instructions"
                         value={supervisorInstructions}
                         onChange={(e) => setSupervisorInstructions(e.target.value)}
-                        placeholder="Configuration..."
+                        placeholder={tCommon('configuration')}
                         className="min-h-[200px] font-mono text-sm"
                       />
                     </div>
@@ -465,7 +465,7 @@ export default function SettingsPage() {
 
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <p className="text-sm text-blue-800">
-                      💡 <strong>Tip:</strong> Changes take effect immediately for new calls.
+                      💡 <strong>{tCommon('tip')}</strong> Changes take effect immediately for new calls.
                     </p>
                   </div>
                 </>

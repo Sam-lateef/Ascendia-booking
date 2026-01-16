@@ -306,8 +306,8 @@ export default function CallsPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Calls</h1>
-          <p className="text-gray-600 mt-2">View patient call recordings and conversation history</p>
+          <h1 className="text-3xl font-bold text-gray-900">{tCommon('calls')}</h1>
+          <p className="text-gray-600 mt-2">{tCommon('view_patient_call_recordings_a')}</p>
         </div>
         <div className="text-center py-8 text-gray-500">
           Loading conversations...
@@ -347,7 +347,7 @@ export default function CallsPage() {
       {/* Date Filter */}
       <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-end">
         <div className="flex-1 sm:flex-initial">
-          <Label htmlFor="date">Select Date</Label>
+          <Label htmlFor="date">{tCommon('select_date')}</Label>
           <Input
             id="date"
             type="date"
@@ -365,25 +365,25 @@ export default function CallsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white rounded-lg border p-4">
           <div className="text-2xl font-bold text-blue-600">{conversations.length}</div>
-          <div className="text-sm text-gray-600">Total Calls</div>
+          <div className="text-sm text-gray-600">{tCommon('total_calls')}</div>
         </div>
         <div className="bg-white rounded-lg border p-4">
           <div className="text-2xl font-bold text-green-600">
             {conversations.filter(c => c.outcome === 'completed').length}
           </div>
-          <div className="text-sm text-gray-600">Completed</div>
+          <div className="text-sm text-gray-600">{tCommon('completed')}</div>
         </div>
         <div className="bg-white rounded-lg border p-4">
           <div className="text-2xl font-bold text-blue-500">
             {conversations.filter(c => c.outcome === 'in_progress').length}
           </div>
-          <div className="text-sm text-gray-600">In Progress</div>
+          <div className="text-sm text-gray-600">{tCommon('in_progress')}</div>
         </div>
         <div className="bg-white rounded-lg border p-4">
           <div className="text-2xl font-bold text-orange-500">
             {conversations.filter(c => c.outcome === 'abandoned').length}
           </div>
-          <div className="text-sm text-gray-600">Abandoned</div>
+          <div className="text-sm text-gray-600">{tCommon('abandoned')}</div>
         </div>
       </div>
 
@@ -392,15 +392,15 @@ export default function CallsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Time</TableHead>
-              <TableHead>Channel</TableHead>
+              <TableHead>{tCommon('time')}</TableHead>
+              <TableHead>{tCommon('channel')}</TableHead>
               <TableHead>Patient</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Intent</TableHead>
-              <TableHead>Messages</TableHead>
-              <TableHead>Duration</TableHead>
+              <TableHead>{tCommon('phone')}</TableHead>
+              <TableHead>{tCommon('intent')}</TableHead>
+              <TableHead>{tCommon('messages')}</TableHead>
+              <TableHead>{tCommon('duration')}</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Actions</TableHead>
+              <TableHead>{tCommon('actions')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -479,16 +479,16 @@ export default function CallsPage() {
               <div className="space-y-2 text-sm">
                 {conv.patientPhone && (
                   <div>
-                    <span className="font-medium text-gray-700">Phone: </span>
+                    <span className="font-medium text-gray-700">{tCommon('phone')}</span>
                     <span className="text-gray-900">{conv.patientPhone}</span>
                   </div>
                 )}
                 <div>
-                  <span className="font-medium text-gray-700">Intent: </span>
+                  <span className="font-medium text-gray-700">{tCommon('intent')}</span>
                   {getIntentBadge(conv.intent)}
                 </div>
                 <div>
-                  <span className="font-medium text-gray-700">Duration: </span>
+                  <span className="font-medium text-gray-700">{tCommon('duration')}</span>
                   <span className="text-gray-900">
                     {formatDuration(conv.createdAt, conv.updatedAt)}
                   </span>
@@ -536,11 +536,11 @@ export default function CallsPage() {
                   <div className="font-medium">{selectedConversation.patientName || 'Unknown'}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500">Phone</div>
+                  <div className="text-xs text-gray-500">{tCommon('phone')}</div>
                   <div className="font-medium">{selectedConversation.patientPhone || '-'}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500">Intent</div>
+                  <div className="text-xs text-gray-500">{tCommon('intent')}</div>
                   <div>{getIntentBadge(selectedConversation.intent)}</div>
                 </div>
                 <div>
@@ -549,13 +549,13 @@ export default function CallsPage() {
                 </div>
                 {selectedConversation.appointmentType && (
                   <div>
-                    <div className="text-xs text-gray-500">Appointment Type</div>
+                    <div className="text-xs text-gray-500">{tCommon('appointment_type')}</div>
                     <div className="font-medium">{selectedConversation.appointmentType}</div>
                   </div>
                 )}
                 {selectedConversation.appointmentDate && (
                   <div>
-                    <div className="text-xs text-gray-500">Appointment Date</div>
+                    <div className="text-xs text-gray-500">{tCommon('appointment_date')}</div>
                     <div className="font-medium">{selectedConversation.appointmentDate}</div>
                   </div>
                 )}
@@ -563,7 +563,7 @@ export default function CallsPage() {
 
               {/* Messages */}
               <div className="space-y-2">
-                <div className="text-sm font-semibold text-gray-700">Conversation</div>
+                <div className="text-sm font-semibold text-gray-700">{tCommon('conversation')}</div>
                 <div className="space-y-3 max-h-96 overflow-y-auto p-4 border rounded-lg bg-white">
                   {selectedConversation.messages.length === 0 ? (
                     <div className="text-center text-gray-500 py-4">

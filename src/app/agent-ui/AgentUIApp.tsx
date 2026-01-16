@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
+
 import React, { useEffect, useRef, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { v4 as uuidv4 } from "uuid";
@@ -39,6 +41,7 @@ const sdkScenarioMap: Record<string, RealtimeAgent[]> = {
 };
 
 function AgentUIAppInner() {
+  const tCommon = useTranslations('common');
   const searchParams = useSearchParams();
 
   const {
@@ -482,8 +485,8 @@ function AgentUIAppInner() {
               cursor: sessionStatus === "CONNECTED" || sessionStatus === "CONNECTING" ? 'not-allowed' : 'pointer',
             }}
           >
-            <option value="premium">Premium</option>
-            <option value="standard">Standard</option>
+            <option value="premium">{tCommon('premium')}</option>
+            <option value="standard">{tCommon('standard')}</option>
           </select>
         </div>
         <div className="flex items-center gap-2 md:gap-3">

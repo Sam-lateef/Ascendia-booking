@@ -468,25 +468,25 @@ export default function SchedulesPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="p-4 bg-blue-50 rounded-lg">
           <div className="text-2xl font-bold text-blue-600">{schedules.length}</div>
-          <div className="text-sm text-gray-600">Total Schedules</div>
+          <div className="text-sm text-gray-600">{tCommon('total_schedules')}</div>
         </div>
         <div className="p-4 bg-green-50 rounded-lg">
           <div className="text-2xl font-bold text-green-600">
             {schedules.filter(s => s.IsActive).length}
           </div>
-          <div className="text-sm text-gray-600">Active</div>
+          <div className="text-sm text-gray-600">{tCommon('active')}</div>
         </div>
         <div className="p-4 bg-purple-50 rounded-lg">
           <div className="text-2xl font-bold text-purple-600">
             {Object.keys(groupedByDate).length}
           </div>
-          <div className="text-sm text-gray-600">Days with Schedules</div>
+          <div className="text-sm text-gray-600">{tCommon('days_with_schedules')}</div>
         </div>
         <div className="p-4 bg-orange-50 rounded-lg">
           <div className="text-2xl font-bold text-orange-600">
             {new Set(schedules.map(s => s.ProvNum)).size}
           </div>
-          <div className="text-sm text-gray-600">Providers Scheduled</div>
+          <div className="text-sm text-gray-600">{tCommon('providers_scheduled')}</div>
         </div>
       </div>
 
@@ -495,10 +495,10 @@ export default function SchedulesPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
+              <TableHead>{tCommon('date')}</TableHead>
               <TableHead>Provider</TableHead>
               <TableHead>Room</TableHead>
-              <TableHead>Hours</TableHead>
+              <TableHead>{tCommon('hours')}</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
@@ -617,10 +617,10 @@ export default function SchedulesPage() {
               </div>
             )}
             <div>
-              <Label>Provider *</Label>
+              <Label>{tCommon('provider')}</Label>
               <Select value={formProvider} onValueChange={setFormProvider}>
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select Provider" />
+                  <SelectValue placeholder={tCommon('select_provider')} />
                 </SelectTrigger>
                 <SelectContent>
                   {providers.map((p) => (
@@ -632,10 +632,10 @@ export default function SchedulesPage() {
               </Select>
             </div>
             <div>
-              <Label>Room (Operatory) *</Label>
+              <Label>{tCommon('room_operatory')}</Label>
               <Select value={formOperatory} onValueChange={setFormOperatory}>
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select Room" />
+                  <SelectValue placeholder={tCommon('select_room')} />
                 </SelectTrigger>
                 <SelectContent>
                   {operatories.map((op) => (
@@ -647,7 +647,7 @@ export default function SchedulesPage() {
               </Select>
             </div>
             <div>
-              <Label>Date *</Label>
+              <Label>{tCommon('date')}</Label>
               <Input
                 type="date"
                 value={formDate}
@@ -657,7 +657,7 @@ export default function SchedulesPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Start Time *</Label>
+                <Label>{tCommon('start_time')}</Label>
                 <Select value={formStartTime} onValueChange={setFormStartTime}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
@@ -672,7 +672,7 @@ export default function SchedulesPage() {
                 </Select>
               </div>
               <div>
-                <Label>End Time *</Label>
+                <Label>{tCommon('end_time')}</Label>
                 <Select value={formEndTime} onValueChange={setFormEndTime}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
@@ -689,10 +689,10 @@ export default function SchedulesPage() {
             </div>
             <div className="flex items-center gap-2">
               <Checkbox checked={formIsActive} onCheckedChange={(checked) => setFormIsActive(checked === true)} />
-              <Label>Active</Label>
+              <Label>{tCommon('active')}</Label>
             </div>
             <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-yellow-800 text-sm">
-              <strong>Note:</strong> Only one provider can be in a room at any given time.
+              <strong>{tCommon('note')}</strong> Only one provider can be in a room at any given time.
               A provider cannot be in two rooms at the same time.
             </div>
           </div>
@@ -709,7 +709,7 @@ export default function SchedulesPage() {
       <Dialog open={isBulkDialogOpen} onOpenChange={setIsBulkDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Bulk Create Schedules</DialogTitle>
+            <DialogTitle>{tCommon('bulk_create_schedules')}</DialogTitle>
             <DialogDescription>
               Create schedules for a date range (Mon-Fri by default)
             </DialogDescription>
@@ -721,10 +721,10 @@ export default function SchedulesPage() {
               </div>
             )}
             <div>
-              <Label>Provider *</Label>
+              <Label>{tCommon('provider')}</Label>
               <Select value={bulkProvider} onValueChange={setBulkProvider}>
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select Provider" />
+                  <SelectValue placeholder={tCommon('select_provider')} />
                 </SelectTrigger>
                 <SelectContent>
                   {providers.map((p) => (
@@ -736,10 +736,10 @@ export default function SchedulesPage() {
               </Select>
             </div>
             <div>
-              <Label>Room (Operatory) *</Label>
+              <Label>{tCommon('room_operatory')}</Label>
               <Select value={bulkOperatory} onValueChange={setBulkOperatory}>
                 <SelectTrigger className="mt-1">
-                  <SelectValue placeholder="Select Room" />
+                  <SelectValue placeholder={tCommon('select_room')} />
                 </SelectTrigger>
                 <SelectContent>
                   {operatories.map((op) => (
@@ -752,7 +752,7 @@ export default function SchedulesPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Start Date *</Label>
+                <Label>{tCommon('start_date')}</Label>
                 <Input
                   type="date"
                   value={bulkDateStart}
@@ -761,7 +761,7 @@ export default function SchedulesPage() {
                 />
               </div>
               <div>
-                <Label>End Date *</Label>
+                <Label>{tCommon('end_date')}</Label>
                 <Input
                   type="date"
                   value={bulkDateEnd}
@@ -772,7 +772,7 @@ export default function SchedulesPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Start Time</Label>
+                <Label>{tCommon('start_time')}</Label>
                 <Select value={bulkStartTime} onValueChange={setBulkStartTime}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
@@ -787,7 +787,7 @@ export default function SchedulesPage() {
                 </Select>
               </div>
               <div>
-                <Label>End Time</Label>
+                <Label>{tCommon('end_time')}</Label>
                 <Select value={bulkEndTime} onValueChange={setBulkEndTime}>
                   <SelectTrigger className="mt-1">
                     <SelectValue />
@@ -821,7 +821,7 @@ export default function SchedulesPage() {
             <Button variant="outline" onClick={() => setIsBulkDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleBulkCreate}>Create Schedules</Button>
+            <Button onClick={handleBulkCreate}>{tCommon('create_schedules')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

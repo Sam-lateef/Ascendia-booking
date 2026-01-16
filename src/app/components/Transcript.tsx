@@ -7,6 +7,7 @@ import Image from "next/image";
 import { useTranscript } from "@/app/contexts/TranscriptContext";
 import { DownloadIcon, ClipboardCopyIcon } from "@radix-ui/react-icons";
 import { GuardrailChip } from "./GuardrailChip";
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
 
 export interface TranscriptProps {
   userText: string;
@@ -23,6 +24,7 @@ function Transcript({
   canSend,
   downloadRecording,
 }: TranscriptProps) {
+  const tCommon = useTranslations('common');
   const { transcriptItems, toggleTranscriptItemExpand } = useTranscript();
   const transcriptRef = useRef<HTMLDivElement | null>(null);
   const [prevLogs, setPrevLogs] = useState<TranscriptItem[]>([]);
@@ -74,7 +76,7 @@ function Transcript({
     <div className="flex flex-col flex-1 min-h-0" style={{ background: 'var(--dark-3)' }}>
       <div className="flex flex-col flex-1 min-h-0">
         <div className="flex items-center justify-between px-6 py-3 sticky top-0 z-10 text-base" style={{ borderBottom: '1px solid var(--border-gray)', background: 'var(--dark-4)', color: 'var(--text-gray)' }}>
-          <span className="font-semibold">Transcript</span>
+          <span className="font-semibold">{tCommon('transcript')}</span>
           <div className="flex gap-x-2">
             <button
               onClick={handleCopyTranscript}
@@ -94,7 +96,7 @@ function Transcript({
               onMouseLeave={(e) => e.currentTarget.style.background = 'var(--dark-4)'}
             >
               <DownloadIcon />
-              <span>Download Audio</span>
+              <span>{tCommon('download_audio')}</span>
             </button>
           </div>
         </div>
@@ -229,7 +231,7 @@ function Transcript({
           }}
           className="flex-1 px-4 py-2 focus:outline-none"
           style={{ background: 'var(--dark-4)', color: 'var(--text-gray)', border: '1px solid var(--border-gray)' }}
-          placeholder="Type a message..."
+          placeholder={tCommon('type_a_message')}
         />
         <button
           onClick={onSendMessage}
@@ -237,7 +239,7 @@ function Transcript({
           className="px-2 py-2 disabled:opacity-50"
           style={{ background: 'var(--dark-4)', color: 'var(--text-gray)' }}
         >
-          <Image src="arrow.svg" alt="Send" width={24} height={24} />
+          <Image src="arrow.svg" alt={tCommon('send')} width={24} height={24} />
         </button>
       </div>
     </div>

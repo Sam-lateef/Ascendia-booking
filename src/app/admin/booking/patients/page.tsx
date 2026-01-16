@@ -185,8 +185,8 @@ export default function PatientsPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Patients</h1>
-          <p className="text-gray-600 mt-2">Search and manage patient records</p>
+          <h1 className="text-3xl font-bold text-gray-900">{tCommon('patients')}</h1>
+          <p className="text-gray-600 mt-2">{tCommon('search_and_manage_patient_reco')}</p>
         </div>
         <div className="text-center py-8 text-gray-500">
           {t('loading')}
@@ -327,13 +327,13 @@ export default function PatientsPage() {
                 )}
                 {patient.DateCreated && (
                   <div className="text-xs text-gray-500">
-                    <span className="font-medium">Created: </span>
+                    <span className="font-medium">{tCommon('created')}</span>
                     {new Date(patient.DateCreated).toLocaleDateString()} {new Date(patient.DateCreated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 )}
                 {patient.DateTStamp && (
                   <div className="text-xs text-gray-500">
-                    <span className="font-medium">Modified: </span>
+                    <span className="font-medium">{tCommon('modified')}</span>
                     {new Date(patient.DateTStamp).toLocaleDateString()} {new Date(patient.DateTStamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                   </div>
                 )}
@@ -408,7 +408,7 @@ export default function PatientsPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="birthdate">Birthdate *</Label>
+                  <Label htmlFor="birthdate">{tCommon('birthdate')}</Label>
                   <Input
                     id="birthdate"
                     name="birthdate"
@@ -419,7 +419,7 @@ export default function PatientsPage() {
                 </div>
               </div>
               <div>
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{tCommon('email')}</Label>
                 <Input
                   id="email"
                   name="email"
@@ -439,7 +439,7 @@ export default function PatientsPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit">Save</Button>
+              <Button type="submit">{tCommon('save')}</Button>
             </DialogFooter>
           </form>
         </DialogContent>

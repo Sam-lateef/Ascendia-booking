@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { Menu, X, Globe } from 'lucide-react';
-import { useTranslation } from '@/lib/i18n/TranslationProvider';
+import { useTranslation, useTranslations } from '@/lib/i18n/TranslationProvider';
 import { SUPPORTED_LANGUAGES } from '@/lib/languages';
 
 /**
@@ -15,6 +15,7 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const tCommon = useTranslations('common');
   const { t, locale, setLocale } = useTranslation('admin');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
@@ -32,10 +33,13 @@ export default function AdminLayout({
     { href: `/admin/booking/schedules`, key: 'schedules' },
     { href: `/admin/booking/operatories`, key: 'operatories' },
     { href: `/admin/booking/patients`, key: 'patients' },
+    { href: `/admin/booking/treatments`, key: 'treatments', label: 'Treatment Plans' },
+    { href: `/admin/booking/treatments-config`, key: 'treatmentsConfig', label: 'Treatments Config' },
     { href: `/admin/booking/calls`, key: 'calls' },
     { href: `/admin/booking/calls/statistics`, key: 'statistics' },
     { href: `/admin/booking/settings`, key: 'settings' },
     { href: `/admin/booking/translations`, key: 'translations' },
+    { href: `/admin/booking/translations/hardcoded`, key: 'hardcodedScanner', label: 'Hardcoded Text Scanner' },
   ];
 
   // All hooks must be called before any conditional returns
@@ -136,14 +140,14 @@ export default function AdminLayout({
           <button
             onClick={() => setShowLangMenu(!showLangMenu)}
             className="p-2 rounded-md hover:bg-gray-800 transition-colors"
-            aria-label="Change language"
+            aria-label={tCommon('change_language')}
           >
             <Globe className="h-5 w-5" />
           </button>
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
             className="p-2 rounded-md hover:bg-gray-800 transition-colors"
-            aria-label="Toggle menu"
+            aria-label={tCommon('toggle_menu')}
           >
             {isMobileMenuOpen ? (
               <X className="h-6 w-6" />
@@ -175,7 +179,7 @@ export default function AdminLayout({
         <div className="fixed top-16 right-4 lg:top-auto lg:left-6 lg:bottom-20 w-64 bg-white rounded-lg shadow-xl z-[60] max-h-96 overflow-y-auto">
           <div className="p-3 border-b bg-gray-50 flex items-center gap-2">
             <Globe className="h-4 w-4 text-gray-600" />
-            <span className="font-medium text-gray-900">Select Language</span>
+            <span className="font-medium text-gray-900">{tCommon('select_language')}</span>
           </div>
           <div className="p-2">
             {SUPPORTED_LANGUAGES.map((lang) => (
@@ -210,7 +214,7 @@ export default function AdminLayout({
           <button
             onClick={() => setIsMobileMenuOpen(false)}
             className="lg:hidden p-2 rounded-md hover:bg-gray-800 transition-colors"
-            aria-label="Close menu"
+            aria-label={tCommon('close_menu')}
           >
             <X className="h-6 w-6" />
           </button>
@@ -218,6 +222,7 @@ export default function AdminLayout({
         <nav className="space-y-2">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
+            const label = (item as any).label || t(item.key);
             return (
               <Link
                 key={item.href}
@@ -229,7 +234,7 @@ export default function AdminLayout({
                     : 'text-gray-300 hover:bg-gray-800 hover:text-white'
                 }`}
               >
-                {t(item.key)}
+                {label}
               </Link>
             );
           })}

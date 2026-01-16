@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
 
 interface BookingPanelProps {
   sessionStatus: string;
@@ -35,6 +36,7 @@ interface Patient {
 }
 
 export default function EmbeddedBookingPanel({ sessionStatus }: BookingPanelProps) {
+  const tCommon = useTranslations('common');
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     return today.toISOString().split('T')[0];
@@ -195,7 +197,7 @@ export default function EmbeddedBookingPanel({ sessionStatus }: BookingPanelProp
           <>
             {/* Booking Info */}
             <div className="p-3 rounded-lg" style={{ background: '#f0fdf4', border: '1px solid #86efac' }}>
-              <h4 className="text-sm font-semibold mb-1" style={{ color: '#166534' }}>Barton Dental</h4>
+              <h4 className="text-sm font-semibold mb-1" style={{ color: '#166534' }}>{tCommon('barton_dental')}</h4>
               <p className="text-xs" style={{ color: '#15803d' }}>
                 Embedded booking system for patient self-scheduling
               </p>
@@ -209,13 +211,13 @@ export default function EmbeddedBookingPanel({ sessionStatus }: BookingPanelProp
               </div>
               <div className="p-2 rounded" style={{ background: '#f3f4f6' }}>
                 <div className="text-lg font-bold" style={{ color: '#10b981' }}>{operatories.length}</div>
-                <div className="text-xs" style={{ color: '#6b7280' }}>Operatories</div>
+                <div className="text-xs" style={{ color: '#6b7280' }}>{tCommon('operatories')}</div>
               </div>
             </div>
 
             {/* Available Providers */}
             <div>
-              <h4 className="text-xs font-semibold mb-2" style={{ color: '#374151' }}>Available Providers</h4>
+              <h4 className="text-xs font-semibold mb-2" style={{ color: '#374151' }}>{tCommon('available_providers')}</h4>
               <div className="space-y-1">
                 {providers.slice(0, 5).map(p => (
                   <div key={p.ProvNum} className="flex items-center justify-between px-2 py-1 rounded text-xs" style={{ background: '#f9fafb' }}>
@@ -236,7 +238,7 @@ export default function EmbeddedBookingPanel({ sessionStatus }: BookingPanelProp
                 Appointments ({new Date(selectedDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })})
               </h4>
               {appointments.length === 0 ? (
-                <div className="text-xs text-center py-2" style={{ color: '#6b7280' }}>No appointments for this date</div>
+                <div className="text-xs text-center py-2" style={{ color: '#6b7280' }}>{tCommon('no_appointments_for_this_date')}</div>
               ) : (
                 <div className="space-y-1.5 max-h-48 overflow-y-auto">
                   {appointments.map(apt => (
@@ -258,7 +260,7 @@ export default function EmbeddedBookingPanel({ sessionStatus }: BookingPanelProp
 
             {/* Features */}
             <div>
-              <h4 className="text-xs font-semibold mb-2" style={{ color: '#374151' }}>Features</h4>
+              <h4 className="text-xs font-semibold mb-2" style={{ color: '#374151' }}>{tCommon('features')}</h4>
               <div className="space-y-1 text-xs" style={{ color: '#6b7280' }}>
                 <div className="flex items-center gap-2">
                   <span style={{ color: '#10b981' }}>✓</span> Patient lookup by phone

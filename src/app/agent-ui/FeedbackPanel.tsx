@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
 
 interface FeedbackPanelProps {
   sessionId: string;
@@ -16,6 +17,7 @@ export default function FeedbackPanel({
   onClose,
   conversationMessageCount = 0 
 }: FeedbackPanelProps) {
+  const tCommon = useTranslations('common');
   const [rating, setRating] = useState<number | null>(null);
   const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -100,7 +102,7 @@ export default function FeedbackPanel({
           <button 
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 text-xl leading-none"
-            aria-label="Close"
+            aria-label={tCommon('close')}
           >
             ×
           </button>
@@ -108,7 +110,7 @@ export default function FeedbackPanel({
 
         {/* Star Rating */}
         <div className="mb-4">
-          <p className="text-sm text-gray-600 mb-2">Rate your experience:</p>
+          <p className="text-sm text-gray-600 mb-2">{tCommon('rate_your_experience')}</p>
           <div className="flex gap-2 justify-center">
             {[1, 2, 3, 4, 5].map((star) => (
               <button
@@ -138,7 +140,7 @@ export default function FeedbackPanel({
 
         {/* Quick Feedback Buttons */}
         <div className="mb-4">
-          <p className="text-sm text-gray-600 mb-2">Quick feedback:</p>
+          <p className="text-sm text-gray-600 mb-2">{tCommon('quick_feedback')}</p>
           <div className="flex gap-2 justify-center">
             <button
               onClick={() => {
@@ -169,7 +171,7 @@ export default function FeedbackPanel({
           <textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="What could we do better?"
+            placeholder={tCommon('what_could_we_do_better')}
             className="w-full border rounded-lg p-3 text-sm text-gray-700 resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
             rows={3}
           />

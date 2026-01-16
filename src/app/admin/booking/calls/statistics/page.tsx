@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
+
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -263,6 +265,7 @@ function StatCard({
 }
 
 export default function CallStatisticsPage() {
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -484,11 +487,11 @@ export default function CallStatisticsPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Call Statistics</h1>
-          <p className="text-gray-600 mt-2">Analyzing call data...</p>
+          <h1 className="text-3xl font-bold text-gray-900">{tCommon('call_statistics')}</h1>
+          <p className="text-gray-600 mt-2">{tCommon('analyzing_call_data')}</p>
         </div>
         <div className="flex items-center justify-center py-12">
-          <div className="animate-pulse text-gray-400">Loading statistics...</div>
+          <div className="animate-pulse text-gray-400">{tCommon('loading_statistics')}</div>
         </div>
       </div>
     );
@@ -499,8 +502,8 @@ export default function CallStatisticsPage() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Call Statistics</h1>
-          <p className="text-sm text-gray-600 mt-1">Performance metrics and call analytics</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{tCommon('call_statistics')}</h1>
+          <p className="text-sm text-gray-600 mt-1">{tCommon('performance_metrics_and_call_a')}</p>
         </div>
         
         {/* View Switcher */}
@@ -523,17 +526,17 @@ export default function CallStatisticsPage() {
       {/* Date Range Picker */}
       <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-end bg-white p-4 rounded-lg border">
         <div className="flex items-center gap-2">
-          <Label className="text-sm text-gray-600">Period:</Label>
+          <Label className="text-sm text-gray-600">{tCommon('period')}</Label>
           <Select value={datePreset} onValueChange={handlePresetChange}>
             <SelectTrigger className="w-36">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="today">Today</SelectItem>
-              <SelectItem value="yesterday">Yesterday</SelectItem>
-              <SelectItem value="week">Last 7 Days</SelectItem>
-              <SelectItem value="month">Last 30 Days</SelectItem>
-              <SelectItem value="custom">Custom Range</SelectItem>
+              <SelectItem value="today">{tCommon('today')}</SelectItem>
+              <SelectItem value="yesterday">{tCommon('yesterday')}</SelectItem>
+              <SelectItem value="week">{tCommon('last_7_days')}</SelectItem>
+              <SelectItem value="month">{tCommon('last_30_days')}</SelectItem>
+              <SelectItem value="custom">{tCommon('custom_range')}</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -541,7 +544,7 @@ export default function CallStatisticsPage() {
         {datePreset === 'custom' && (
           <>
             <div>
-              <Label htmlFor="dateStart" className="text-xs text-gray-500">From</Label>
+              <Label htmlFor="dateStart" className="text-xs text-gray-500">{tCommon('from')}</Label>
               <Input
                 id="dateStart"
                 type="date"
@@ -551,7 +554,7 @@ export default function CallStatisticsPage() {
               />
             </div>
             <div>
-              <Label htmlFor="dateEnd" className="text-xs text-gray-500">To</Label>
+              <Label htmlFor="dateEnd" className="text-xs text-gray-500">{tCommon('to')}</Label>
               <Input
                 id="dateEnd"
                 type="date"
@@ -573,32 +576,32 @@ export default function CallStatisticsPage() {
         <StatCard
           icon={<Phone className="h-5 w-5" />}
           value={stats.total}
-          label="Total Calls"
+          label={tCommon('total_calls')}
           color="blue"
         />
         <StatCard
           icon={<TrendingUp className="h-5 w-5" />}
           value={`${stats.successRate}%`}
-          label="Success Rate"
+          label={tCommon('success_rate')}
           color={stats.successRate >= 80 ? 'green' : stats.successRate >= 50 ? 'yellow' : 'red'}
           subValue={`${stats.completed} completed`}
         />
         <StatCard
           icon={<UserPlus className="h-5 w-5" />}
           value={stats.newPatients}
-          label="New Patients"
+          label={tCommon('new_patients')}
           color="green"
         />
         <StatCard
           icon={<CalendarPlus className="h-5 w-5" />}
           value={stats.appointmentsBooked}
-          label="Appointments Booked"
+          label={tCommon('appointments_booked')}
           color="green"
         />
         <StatCard
           icon={<CalendarClock className="h-5 w-5" />}
           value={stats.appointmentsRescheduled}
-          label="Rescheduled"
+          label={tCommon('rescheduled')}
           color="blue"
         />
       </div>
@@ -608,32 +611,32 @@ export default function CallStatisticsPage() {
         <StatCard
           icon={<Users className="h-5 w-5" />}
           value={stats.returningPatients}
-          label="Returning Patients"
+          label={tCommon('returning_patients')}
           color="purple"
         />
         <StatCard
           icon={<Clock className="h-5 w-5" />}
           value={stats.avgDuration}
-          label="Avg Duration"
+          label={tCommon('avg_duration')}
           color="gray"
         />
         <StatCard
           icon={<MessageSquare className="h-5 w-5" />}
           value={stats.avgMessages}
-          label="Avg Messages"
+          label={tCommon('avg_messages')}
           color="gray"
         />
         <StatCard
           icon={<XCircle className="h-5 w-5" />}
           value={stats.abandoned}
-          label="Abandoned"
+          label={tCommon('abandoned')}
           color="red"
         />
       </div>
 
       {/* Intent Breakdown */}
       <div className="bg-white rounded-lg border p-4">
-        <h3 className="font-semibold text-gray-900 mb-4">Calls by Intent</h3>
+        <h3 className="font-semibold text-gray-900 mb-4">{tCommon('calls_by_intent')}</h3>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {Object.entries(stats.intentCounts).map(([intent, count]) => (
             <div key={intent} className="flex items-center gap-3">
@@ -757,7 +760,7 @@ export default function CallStatisticsPage() {
       <Sheet open={isDrawerOpen} onOpenChange={setIsDrawerOpen}>
         <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
           <SheetHeader>
-            <SheetTitle>Call Details</SheetTitle>
+            <SheetTitle>{tCommon('call_details')}</SheetTitle>
             <SheetDescription>
               {selectedCall && (
                 <span>
@@ -781,25 +784,25 @@ export default function CallStatisticsPage() {
                   <div className="font-medium">{selectedCall.patientName || 'Unknown'}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500">Phone</div>
+                  <div className="text-xs text-gray-500">{tCommon('phone')}</div>
                   <div className="font-medium">{formatPhone(selectedCall.patientPhone) || '-'}</div>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500">Intent</div>
+                  <div className="text-xs text-gray-500">{tCommon('intent')}</div>
                   <Badge variant="outline" className="mt-1">{selectedCall.intent}</Badge>
                 </div>
                 <div>
-                  <div className="text-xs text-gray-500">Duration</div>
+                  <div className="text-xs text-gray-500">{tCommon('duration')}</div>
                   <div className="font-medium">{formatDuration(selectedCall.createdAt, selectedCall.updatedAt)}</div>
                 </div>
               </div>
 
               {/* Actions Taken */}
               <div>
-                <h4 className="font-semibold text-gray-900 mb-3">Actions</h4>
+                <h4 className="font-semibold text-gray-900 mb-3">{tCommon('actions')}</h4>
                 <div className="space-y-2">
                   {selectedCall.functionCalls.length === 0 ? (
-                    <div className="text-gray-500 text-sm">No actions recorded</div>
+                    <div className="text-gray-500 text-sm">{tCommon('no_actions_recorded')}</div>
                   ) : (
                     selectedCall.functionCalls.map((fc, idx) => {
                       const action = formatAction(fc);
@@ -826,12 +829,12 @@ export default function CallStatisticsPage() {
 
               {/* Transcript */}
               <div>
-                <h4 className="font-semibold text-gray-900 mb-3">Conversation</h4>
+                <h4 className="font-semibold text-gray-900 mb-3">{tCommon('conversation')}</h4>
                 <div className="space-y-3 max-h-80 overflow-y-auto p-3 bg-gray-50 rounded-lg">
                   {selectedCall.messages.length === 0 ? (
                     <div className="text-gray-400 text-sm text-center py-4">
-                      <p>No transcript available</p>
-                      <p className="text-xs mt-1">Transcripts are recorded for calls after Dec 2025</p>
+                      <p>{tCommon('no_transcript_available')}</p>
+                      <p className="text-xs mt-1">{tCommon('transcripts_are_recorded_for_c')}</p>
                     </div>
                   ) : (
                     selectedCall.messages.map((msg, idx) => (

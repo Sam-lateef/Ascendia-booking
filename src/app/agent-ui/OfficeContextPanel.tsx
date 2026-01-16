@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
 import type { Provider, Operatory } from "@/app/lib/officeContext";
 
 interface Appointment {
@@ -21,6 +22,7 @@ interface OfficeContextPanelProps {
 }
 
 export default function OfficeContextPanel({ sessionStatus }: OfficeContextPanelProps) {
+  const tCommon = useTranslations('common');
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     return today.toISOString().split('T')[0];
@@ -192,11 +194,11 @@ export default function OfficeContextPanel({ sessionStatus }: OfficeContextPanel
               </div>
               <div className="p-2 rounded" style={{ background: '#f3f4f6' }}>
                 <div className="text-lg font-bold" style={{ color: '#10b981' }}>{operatories.filter(o => o.isAvailable).length}</div>
-                <div className="text-xs" style={{ color: '#6b7280' }}>Operatories</div>
+                <div className="text-xs" style={{ color: '#6b7280' }}>{tCommon('operatories')}</div>
               </div>
               <div className="p-2 rounded" style={{ background: '#f3f4f6' }}>
                 <div className="text-lg font-bold" style={{ color: '#f59e0b' }}>{scheduledAppointments.length}</div>
-                <div className="text-xs" style={{ color: '#6b7280' }}>Appointments</div>
+                <div className="text-xs" style={{ color: '#6b7280' }}>{tCommon('appointments')}</div>
               </div>
             </div>
 
@@ -220,9 +222,9 @@ export default function OfficeContextPanel({ sessionStatus }: OfficeContextPanel
 
             {/* Today's Appointments */}
             <div>
-              <h4 className="text-xs font-semibold mb-2" style={{ color: '#374151' }}>Today's Appointments</h4>
+              <h4 className="text-xs font-semibold mb-2" style={{ color: '#374151' }}>{tCommon('todays_appointments')}</h4>
               {scheduledAppointments.length === 0 ? (
-                <div className="text-xs text-center py-2" style={{ color: '#6b7280' }}>No appointments scheduled</div>
+                <div className="text-xs text-center py-2" style={{ color: '#6b7280' }}>{tCommon('no_appointments_scheduled')}</div>
               ) : (
                 <div className="space-y-1 max-h-40 overflow-y-auto">
                   {scheduledAppointments.slice(0, 10).map(apt => (

@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
+
 import React, { useState } from "react";
 import OfficeContextModal from "./OfficeContextModal";
 
@@ -8,6 +10,7 @@ interface OfficeContextStatusProps {
 }
 
 export default function OfficeContextStatus({ sessionStatus }: OfficeContextStatusProps) {
+  const tCommon = useTranslations('common');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   return (
@@ -19,7 +22,7 @@ export default function OfficeContextStatus({ sessionStatus }: OfficeContextStat
           background: '#3b82f6',
           color: '#ffffff'
         }}
-        title="View office context and schedule status"
+        title={tCommon('view_office_context_and_schedu')}
       >
         Office Status
       </button>

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -67,6 +68,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export default function WeekCalendarPage() {
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -255,7 +257,7 @@ export default function WeekCalendarPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading calendar...</div>
+        <div className="text-gray-500">{tCommon('loading_calendar')}</div>
       </div>
     );
   }
@@ -265,8 +267,8 @@ export default function WeekCalendarPage() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Week Calendar</h1>
-          <p className="text-sm text-gray-600 mt-1">Weekly overview of all appointments</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{tCommon('week_calendar')}</h1>
+          <p className="text-sm text-gray-600 mt-1">{tCommon('weekly_overview_of_all_appoint')}</p>
         </div>
         
         {/* View Switcher */}
@@ -311,21 +313,19 @@ export default function WeekCalendarPage() {
           <Button variant="outline" size="icon" onClick={() => changeWeek(1)}>
             <ChevronRight className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="sm" onClick={goToToday}>
-            This Week
-          </Button>
+          <Button variant="ghost" size="sm" onClick={goToToday}>{tCommon('this_week')}</Button>
         </div>
 
         {/* Filters */}
         <div className="flex flex-wrap gap-3 items-center">
           <div className="flex items-center gap-2">
-            <Label className="text-sm text-gray-600">Provider:</Label>
+            <Label className="text-sm text-gray-600">{tCommon('provider')}</Label>
             <Select value={filterProvider} onValueChange={setFilterProvider}>
               <SelectTrigger className="w-40">
-                <SelectValue placeholder="All Providers" />
+                <SelectValue placeholder={tCommon('all_providers')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Providers</SelectItem>
+                <SelectItem value="all">{tCommon('all_providers')}</SelectItem>
                 {providers.map(p => (
                   <SelectItem key={p.ProvNum} value={p.ProvNum.toString()}>
                     Dr. {p.FName} {p.LName}
@@ -336,13 +336,13 @@ export default function WeekCalendarPage() {
           </div>
           
           <div className="flex items-center gap-2">
-            <Label className="text-sm text-gray-600">Room:</Label>
+            <Label className="text-sm text-gray-600">{tCommon('room')}</Label>
             <Select value={filterOperatory} onValueChange={setFilterOperatory}>
               <SelectTrigger className="w-36">
-                <SelectValue placeholder="All Rooms" />
+                <SelectValue placeholder={tCommon('all_rooms')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Rooms</SelectItem>
+                <SelectItem value="all">{tCommon('all_rooms')}</SelectItem>
                 {operatories.map(op => (
                   <SelectItem key={op.OperatoryNum} value={op.OperatoryNum.toString()}>
                     {op.OpName}
@@ -453,7 +453,7 @@ export default function WeekCalendarPage() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-white p-4 rounded-lg border">
           <div className="text-2xl font-bold text-gray-900">{totalAppointments}</div>
-          <div className="text-sm text-gray-500">This Week</div>
+          <div className="text-sm text-gray-500">{tCommon('this_week')}</div>
         </div>
         {weekDays.slice(0, 5).map((day, i) => {
           const dateKey = day.toISOString().split('T')[0];
@@ -473,7 +473,7 @@ export default function WeekCalendarPage() {
 
       {/* Provider Legend */}
       <div className="bg-white p-4 rounded-lg border">
-        <div className="text-sm font-medium text-gray-700 mb-2">Providers</div>
+        <div className="text-sm font-medium text-gray-700 mb-2">{tCommon('providers')}</div>
         <div className="flex flex-wrap gap-3">
           {providers.map(prov => {
             const color = getProviderColor(prov.ProvNum);
@@ -491,7 +491,7 @@ export default function WeekCalendarPage() {
       <Dialog open={!!selectedAppointment} onOpenChange={() => setSelectedAppointment(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Appointment Details</DialogTitle>
+            <DialogTitle>{tCommon('appointment_details')}</DialogTitle>
             <DialogDescription>
               {selectedAppointment && new Date(selectedAppointment.AptDateTime).toLocaleString('en-US', {
                 weekday: 'long',
@@ -507,11 +507,11 @@ export default function WeekCalendarPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-gray-500">Patient</Label>
+                  <Label className="text-gray-500">{tCommon('patient')}</Label>
                   <div className="font-medium">{getPatientName(selectedAppointment.PatNum)}</div>
                 </div>
                 <div>
-                  <Label className="text-gray-500">Status</Label>
+                  <Label className="text-gray-500">{tCommon('status')}</Label>
                   <div>
                     <Badge className={STATUS_STYLES[selectedAppointment.AptStatus] || 'bg-gray-500'}>
                       {selectedAppointment.AptStatus}
@@ -519,17 +519,17 @@ export default function WeekCalendarPage() {
                   </div>
                 </div>
                 <div>
-                  <Label className="text-gray-500">Provider</Label>
+                  <Label className="text-gray-500">{tCommon('provider')}</Label>
                   <div className="font-medium">{getProviderName(selectedAppointment.ProvNum)}</div>
                 </div>
                 <div>
-                  <Label className="text-gray-500">Room</Label>
+                  <Label className="text-gray-500">{tCommon('room')}</Label>
                   <div className="font-medium">{getOperatoryName(selectedAppointment.Op)}</div>
                 </div>
               </div>
               {selectedAppointment.Note && (
                 <div>
-                  <Label className="text-gray-500">Notes</Label>
+                  <Label className="text-gray-500">{tCommon('notes')}</Label>
                   <div className="mt-1 p-2 bg-gray-50 rounded text-sm">{selectedAppointment.Note}</div>
                 </div>
               )}

@@ -5,7 +5,7 @@ import AgentUIApp from "./AgentUIApp";
 
 export default function AgentUIPage() {
   return (
-    <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading Agent UI...</div>}>
+    <Suspense fallback={<div style={{ padding: '2rem', textAlign: 'center' }}>Loading...</div>}>
       <TranscriptProvider>
         <EventProvider>
           <AgentUIApp />

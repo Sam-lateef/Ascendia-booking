@@ -1,5 +1,6 @@
 import React from "react";
 import { SessionStatus } from "@/app/types";
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
 
 interface BottomToolbarProps {
   sessionStatus: SessionStatus;
@@ -18,6 +19,7 @@ function BottomToolbar({
   codec,
   onCodecChange,
 }: BottomToolbarProps) {
+  const tCommon = useTranslations('common');
   const isConnected = sessionStatus === "CONNECTED";
   const isConnecting = sessionStatus === "CONNECTING";
 
@@ -76,7 +78,7 @@ function BottomToolbar({
       </div>
 
       <div className="flex flex-row items-center gap-2" style={{ color: 'var(--text-gray)' }}>
-        <div>Codec:</div>
+        <div>{tCommon('codec')}</div>
         {/*
           Codec selector – Lets you force the WebRTC track to use 8 kHz 
           PCMU/PCMA so you can preview how the agent will sound 
@@ -92,9 +94,9 @@ function BottomToolbar({
           className="px-2 py-1 focus:outline-none cursor-pointer"
           style={{ background: 'var(--dark-4)', color: 'var(--text-gray)', border: '1px solid var(--border-gray)' }}
         >
-          <option value="opus">Opus (48 kHz)</option>
-          <option value="pcmu">PCMU (8 kHz)</option>
-          <option value="pcma">PCMA (8 kHz)</option>
+          <option value="opus">{tCommon('opus_48_khz')}</option>
+          <option value="pcmu">{tCommon('pcmu_8_khz')}</option>
+          <option value="pcma">{tCommon('pcma_8_khz')}</option>
         </select>
       </div>
     </div>

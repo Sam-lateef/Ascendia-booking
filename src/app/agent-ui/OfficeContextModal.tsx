@@ -1,5 +1,7 @@
 "use client";
 
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
+
 import React, { useState, useEffect, useCallback } from "react";
 import type { OfficeContext, Provider, Operatory } from "@/app/lib/officeContext";
 
@@ -22,6 +24,7 @@ interface OfficeContextModalProps {
 }
 
 export default function OfficeContextModal({ isOpen, onClose }: OfficeContextModalProps) {
+  const tCommon = useTranslations('common');
   const [selectedDate, setSelectedDate] = useState(() => {
     const today = new Date();
     return today.toISOString().split('T')[0]; // YYYY-MM-DD format
@@ -491,7 +494,7 @@ export default function OfficeContextModal({ isOpen, onClose }: OfficeContextMod
             onClick={onClose}
             className="text-gray-500 hover:text-gray-700 transition-colors"
             style={{ fontSize: '24px', lineHeight: '1' }}
-            aria-label="Close"
+            aria-label={tCommon('close')}
           >
             ×
           </button>
@@ -544,7 +547,7 @@ export default function OfficeContextModal({ isOpen, onClose }: OfficeContextMod
                 </h3>
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 text-xs md:text-sm">
                   <div>
-                    <div className="font-medium" style={{ color: '#374151' }}>Total Schedules</div>
+                    <div className="font-medium" style={{ color: '#374151' }}>{tCommon('total_schedules')}</div>
                     <div className="text-lg font-bold" style={{ color: '#111827' }}>{totalSchedules}</div>
                   </div>
                   <div>
@@ -554,7 +557,7 @@ export default function OfficeContextModal({ isOpen, onClose }: OfficeContextMod
                     </div>
                   </div>
                   <div>
-                    <div className="font-medium" style={{ color: '#374151' }}>Appointments</div>
+                    <div className="font-medium" style={{ color: '#374151' }}>{tCommon('appointments')}</div>
                     <div className="text-lg font-bold" style={{ color: '#111827' }}>{appointments.length}</div>
                   </div>
                 </div>
@@ -577,12 +580,12 @@ export default function OfficeContextModal({ isOpen, onClose }: OfficeContextMod
                         <table className="w-full text-sm">
                           <thead style={{ background: '#f9fafb' }}>
                             <tr>
-                              <th className="px-4 py-2 text-left font-medium" style={{ color: '#374151' }}>Time</th>
+                              <th className="px-4 py-2 text-left font-medium" style={{ color: '#374151' }}>{tCommon('time')}</th>
                               <th className="px-4 py-2 text-left font-medium" style={{ color: '#374151' }}>Patient</th>
                               <th className="px-4 py-2 text-left font-medium" style={{ color: '#374151' }}>Provider</th>
-                              <th className="px-4 py-2 text-left font-medium" style={{ color: '#374151' }}>Operatory</th>
+                              <th className="px-4 py-2 text-left font-medium" style={{ color: '#374151' }}>{tCommon('operatory')}</th>
                               <th className="px-4 py-2 text-left font-medium" style={{ color: '#374151' }}>Status</th>
-                              <th className="px-4 py-2 text-left font-medium" style={{ color: '#374151' }}>Note</th>
+                              <th className="px-4 py-2 text-left font-medium" style={{ color: '#374151' }}>{tCommon('note')}</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -634,12 +637,12 @@ export default function OfficeContextModal({ isOpen, onClose }: OfficeContextMod
                             </span>
                           </div>
                           <div className="space-y-1 text-xs" style={{ color: '#374151' }}>
-                            <div><span className="font-medium">Patient:</span> {apt.patientName}</div>
+                            <div><span className="font-medium">{tCommon('patient')}</span> {apt.patientName}</div>
                             <div><span className="font-medium">Provider:</span> {apt.providerName}</div>
-                            <div><span className="font-medium">Operatory:</span> {apt.operatoryName}</div>
+                            <div><span className="font-medium">{tCommon('operatory')}</span> {apt.operatoryName}</div>
                             {apt.note && (
                               <div className="pt-1" style={{ color: '#6b7280' }}>
-                                <span className="font-medium">Note:</span> {apt.note}
+                                <span className="font-medium">{tCommon('note')}</span> {apt.note}
                               </div>
                             )}
                           </div>

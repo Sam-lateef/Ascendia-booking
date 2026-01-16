@@ -1,5 +1,7 @@
 'use client';
 
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
+
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -73,6 +75,7 @@ const STATUS_COLORS: Record<string, { bg: string; border: string }> = {
 };
 
 export default function TodayGanttPage() {
+  const tCommon = useTranslations('common');
   const router = useRouter();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -246,7 +249,7 @@ export default function TodayGanttPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="text-gray-500">Loading schedule...</div>
+        <div className="text-gray-500">{tCommon('loading_schedule')}</div>
       </div>
     );
   }
@@ -256,8 +259,8 @@ export default function TodayGanttPage() {
       {/* Header */}
       <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Daily Schedule</h1>
-          <p className="text-sm text-gray-600 mt-1">Gantt timeline view of appointments</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{tCommon('daily_schedule')}</h1>
+          <p className="text-sm text-gray-600 mt-1">{tCommon('gantt_timeline_view_of_appoint')}</p>
         </div>
         
         {/* View Switcher */}
@@ -274,9 +277,7 @@ export default function TodayGanttPage() {
             variant="default"
             size="sm"
           >
-            <Clock className="h-4 w-4 mr-1" />
-            Today
-          </Button>
+            <Clock className="h-4 w-4 mr-1" />{tCommon('today')}</Button>
           <Button
             variant="outline"
             size="sm"
@@ -297,7 +298,7 @@ export default function TodayGanttPage() {
               <Button variant="outline" className="justify-start text-left font-normal min-w-[220px]">
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 <div className="flex items-center gap-2">
-                  {isToday && <Badge className="bg-green-500">Today</Badge>}
+                  {isToday && <Badge className="bg-green-500">{tCommon('today')}</Badge>}
                   <span className="font-semibold">{dayName}</span>
                   <span className="text-gray-500">•</span>
                   <span className="text-sm text-gray-500">{dateFormatted}</span>
@@ -319,35 +320,33 @@ export default function TodayGanttPage() {
             </PopoverContent>
           </Popover>
           {!isToday && (
-            <Button variant="ghost" size="sm" onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}>
-              Today
-            </Button>
+            <Button variant="ghost" size="sm" onClick={() => setSelectedDate(new Date().toISOString().split('T')[0])}>{tCommon('today')}</Button>
           )}
         </div>
 
         {/* Filters */}
         <div className="flex flex-wrap gap-3 items-center">
           <div className="flex items-center gap-2">
-            <Label className="text-sm text-gray-600">View by:</Label>
+            <Label className="text-sm text-gray-600">{tCommon('view_by')}</Label>
             <Select value={viewMode} onValueChange={(v: 'operatory' | 'provider') => setViewMode(v)}>
               <SelectTrigger className="w-32">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="operatory">Operatory</SelectItem>
-                <SelectItem value="provider">Provider</SelectItem>
+                <SelectItem value="operatory">{tCommon('operatory')}</SelectItem>
+                <SelectItem value="provider">{tCommon('provider')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           
           <div className="flex items-center gap-2">
-            <Label className="text-sm text-gray-600">Provider:</Label>
+            <Label className="text-sm text-gray-600">{tCommon('provider')}</Label>
             <Select value={filterProvider} onValueChange={setFilterProvider}>
               <SelectTrigger className="w-40">
-                <SelectValue placeholder="All Providers" />
+                <SelectValue placeholder={tCommon('all_providers')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Providers</SelectItem>
+                <SelectItem value="all">{tCommon('all_providers')}</SelectItem>
                 {providers.map(p => (
                   <SelectItem key={p.ProvNum} value={p.ProvNum.toString()}>
                     Dr. {p.FName} {p.LName}
@@ -358,13 +357,13 @@ export default function TodayGanttPage() {
           </div>
           
           <div className="flex items-center gap-2">
-            <Label className="text-sm text-gray-600">Room:</Label>
+            <Label className="text-sm text-gray-600">{tCommon('room')}</Label>
             <Select value={filterOperatory} onValueChange={setFilterOperatory}>
               <SelectTrigger className="w-36">
-                <SelectValue placeholder="All Rooms" />
+                <SelectValue placeholder={tCommon('all_rooms')} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Rooms</SelectItem>
+                <SelectItem value="all">{tCommon('all_rooms')}</SelectItem>
                 {operatories.map(op => (
                   <SelectItem key={op.OperatoryNum} value={op.OperatoryNum.toString()}>
                     {op.OpName}
@@ -466,31 +465,31 @@ export default function TodayGanttPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-lg border">
           <div className="text-2xl font-bold text-gray-900">{filteredAppointments.length}</div>
-          <div className="text-sm text-gray-500">Total Appointments</div>
+          <div className="text-sm text-gray-500">{tCommon('total_appointments')}</div>
         </div>
         <div className="bg-white p-4 rounded-lg border">
           <div className="text-2xl font-bold text-blue-600">
             {filteredAppointments.filter(a => a.AptStatus === 'Scheduled').length}
           </div>
-          <div className="text-sm text-gray-500">Scheduled</div>
+          <div className="text-sm text-gray-500">{tCommon('scheduled')}</div>
         </div>
         <div className="bg-white p-4 rounded-lg border">
           <div className="text-2xl font-bold text-green-600">
             {filteredAppointments.filter(a => a.AptStatus === 'Completed').length}
           </div>
-          <div className="text-sm text-gray-500">Completed</div>
+          <div className="text-sm text-gray-500">{tCommon('completed')}</div>
         </div>
         <div className="bg-white p-4 rounded-lg border">
           <div className="text-2xl font-bold text-orange-600">
             {filteredAppointments.filter(a => ['Cancelled', 'No-Show', 'Broken'].includes(a.AptStatus)).length}
           </div>
-          <div className="text-sm text-gray-500">Cancelled/No-Show</div>
+          <div className="text-sm text-gray-500">{tCommon('cancellednoshow')}</div>
         </div>
       </div>
 
       {/* Provider Legend */}
       <div className="bg-white p-4 rounded-lg border">
-        <div className="text-sm font-medium text-gray-700 mb-2">Providers</div>
+        <div className="text-sm font-medium text-gray-700 mb-2">{tCommon('providers')}</div>
         <div className="flex flex-wrap gap-3">
           {providers.map(prov => {
             const color = getProviderColor(prov.ProvNum);
@@ -508,7 +507,7 @@ export default function TodayGanttPage() {
       <Dialog open={!!selectedAppointment} onOpenChange={() => setSelectedAppointment(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Appointment Details</DialogTitle>
+            <DialogTitle>{tCommon('appointment_details')}</DialogTitle>
             <DialogDescription>
               {selectedAppointment && new Date(selectedAppointment.AptDateTime).toLocaleString()}
             </DialogDescription>
@@ -517,11 +516,11 @@ export default function TodayGanttPage() {
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label className="text-gray-500">Patient</Label>
+                  <Label className="text-gray-500">{tCommon('patient')}</Label>
                   <div className="font-medium">{getPatientName(selectedAppointment.PatNum)}</div>
                 </div>
                 <div>
-                  <Label className="text-gray-500">Status</Label>
+                  <Label className="text-gray-500">{tCommon('status')}</Label>
                   <div>
                     <Badge className={STATUS_COLORS[selectedAppointment.AptStatus]?.bg || 'bg-gray-500'}>
                       {selectedAppointment.AptStatus}
@@ -529,17 +528,17 @@ export default function TodayGanttPage() {
                   </div>
                 </div>
                 <div>
-                  <Label className="text-gray-500">Provider</Label>
+                  <Label className="text-gray-500">{tCommon('provider')}</Label>
                   <div className="font-medium">{getProviderName(selectedAppointment.ProvNum)}</div>
                 </div>
                 <div>
-                  <Label className="text-gray-500">Room</Label>
+                  <Label className="text-gray-500">{tCommon('room')}</Label>
                   <div className="font-medium">{getOperatoryName(selectedAppointment.Op)}</div>
                 </div>
               </div>
               {selectedAppointment.Note && (
                 <div>
-                  <Label className="text-gray-500">Notes</Label>
+                  <Label className="text-gray-500">{tCommon('notes')}</Label>
                   <div className="mt-1 p-2 bg-gray-50 rounded text-sm">{selectedAppointment.Note}</div>
                 </div>
               )}
