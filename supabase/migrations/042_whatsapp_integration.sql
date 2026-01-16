@@ -3,7 +3,16 @@
 -- ============================================================================
 -- Stores WhatsApp instances, phone numbers, and message mappings
 -- Integrates with existing conversations table
+-- Requires: Migration 000 (organizations table)
 -- ============================================================================
+
+-- Verify organizations table exists
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'organizations') THEN
+    RAISE EXCEPTION 'organizations table does not exist. Run migration 000_multi_tenancy_foundation.sql first';
+  END IF;
+END $$;
 
 -- ============================================================================
 -- WHATSAPP INSTANCES TABLE
