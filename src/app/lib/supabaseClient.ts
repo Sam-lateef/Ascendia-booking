@@ -67,6 +67,23 @@ export function getSupabaseClient() {
   return createClient(url, key);
 }
 
+/**
+ * Create Supabase client with organization context for RLS
+ * Sets the app.current_org_id config parameter for Row-Level Security
+ */
+export async function getSupabaseWithOrg(organizationId: string) {
+  const supabase = getSupabaseAdmin();
+  
+  // Set organization context for RLS
+  // This makes RLS policies filter data automatically
+  await supabase.rpc('set_config', {
+    key: 'app.current_org_id',
+    value: organizationId,
+  });
+  
+  return supabase;
+}
+
 
 
 

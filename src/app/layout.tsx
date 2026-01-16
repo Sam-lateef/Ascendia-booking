@@ -3,6 +3,8 @@ import "./globals.css";
 import "./lib/envSetup";
 import { SuppressDevToolsError } from "./components/SuppressDevToolsError";
 import { TranslationProvider } from "../lib/i18n/TranslationProvider";
+import { AuthProvider } from "./contexts/AuthContext";
+import { OrganizationProvider } from "./contexts/OrganizationContext";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
 
@@ -50,7 +52,11 @@ export default function RootLayout({
       <body className={`antialiased`} suppressHydrationWarning>
         <SuppressDevToolsError />
         <TranslationProvider>
-          {children}
+          <AuthProvider>
+            <OrganizationProvider>
+              {children}
+            </OrganizationProvider>
+          </AuthProvider>
         </TranslationProvider>
       </body>
     </html>
