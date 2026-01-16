@@ -28,7 +28,6 @@ const sdkScenarioMap: Record<string, RealtimeAgent[]> = {
 };
 
 import useAudioDownload from "./hooks/useAudioDownload";
-import { useHandleSessionHistory } from "./hooks/useHandleSessionHistory";
 
 function App() {
   const searchParams = useSearchParams()!;
@@ -85,7 +84,6 @@ function App() {
     sendUserText,
     sendEvent,
     interrupt,
-    mute,
   } = useRealtimeSession({
     onConnectionChange: (s) => setSessionStatus(s as SessionStatus),
     onAgentHandoff: (agentName: string) => {
@@ -100,15 +98,6 @@ function App() {
   const [isEventsPaneExpanded, setIsEventsPaneExpanded] =
     useState<boolean>(true);
   const [userText, setUserText] = useState<string>("");
-  const [isPTTActive, setIsPTTActive] = useState<boolean>(false);
-  const [isPTTUserSpeaking, setIsPTTUserSpeaking] = useState<boolean>(false);
-  const [isAudioPlaybackEnabled, setIsAudioPlaybackEnabled] = useState<boolean>(
-    () => {
-      if (typeof window === 'undefined') return true;
-      const stored = localStorage.getItem('audioPlaybackEnabled');
-      return stored ? stored === 'true' : true;
-    },
-  );
 
   // Initialize the recording hook.
   const { startRecording, stopRecording, downloadRecording } =
@@ -122,8 +111,6 @@ function App() {
       console.error('Failed to send via SDK', err);
     }
   };
-
-  useHandleSessionHistory();
 
   useEffect(() => {
     let finalAgentConfig = searchParams.get("agentConfig");
@@ -166,11 +153,6 @@ function App() {
     }
   }, [selectedAgentConfigSet, selectedAgentName, sessionStatus]);
 
-  useEffect(() => {
-    if (sessionStatus === "CONNECTED") {
-      updateSession();
-    }
-  }, [isPTTActive]);
 
   const fetchEphemeralKey = async (): Promise<string | null> => {
     logClientEvent({ url: "/session" }, "fetch_session_token_request");
@@ -229,7 +211,6 @@ function App() {
   const disconnectFromRealtime = () => {
     disconnect();
     setSessionStatus("DISCONNECTED");
-    setIsPTTUserSpeaking(false);
   };
 
   const sendSimulatedUserMessage = (text: string) => {
@@ -249,23 +230,24 @@ function App() {
   };
 
   const updateSession = (shouldTriggerResponse: boolean = false) => {
-    // Reflect Push-to-Talk UI state by (de)activating server VAD on the
-    // backend. The Realtime SDK supports live session updates via the
-    // `session.update` event.
-    const turnDetection = isPTTActive
-      ? null
-      : {
-          type: 'server_vad',
-          threshold: 0.9,
-          prefix_padding_ms: 300,
-          silence_duration_ms: 500,
-          create_response: true,
-        };
+    // Always use server VAD for voice activity detection
+    // ULTRA high threshold to filter out background noise/music
+    const turnDetection = {
+      type: 'server_vad',
+      threshold: 0.99, // MAXIMUM threshold (0.99) - only very clear speech triggers
+      prefix_padding_ms: 300, // Shorter prefix to avoid capturing noise before speech
+      silence_duration_ms: 2000, // Longer silence (2 seconds) to avoid false triggers
+      create_response: true,
+    };
 
     sendEvent({
       type: 'session.update',
       session: {
         turn_detection: turnDetection,
+        input_audio_transcription: {
+          model: 'gpt-4o-mini-transcribe',
+          language: 'en', // Force English only - prevents language mixing
+        },
       },
     });
 
@@ -289,24 +271,6 @@ function App() {
     setUserText("");
   };
 
-  const handleTalkButtonDown = () => {
-    if (sessionStatus !== 'CONNECTED') return;
-    interrupt();
-
-    setIsPTTUserSpeaking(true);
-    sendClientEvent({ type: 'input_audio_buffer.clear' }, 'clear PTT buffer');
-
-    // No placeholder; we'll rely on server transcript once ready.
-  };
-
-  const handleTalkButtonUp = () => {
-    if (sessionStatus !== 'CONNECTED' || !isPTTUserSpeaking)
-      return;
-
-    setIsPTTUserSpeaking(false);
-    sendClientEvent({ type: 'input_audio_buffer.commit' }, 'commit PTT');
-    sendClientEvent({ type: 'response.create' }, 'trigger response PTT');
-  };
 
   const onToggleConnection = () => {
     if (sessionStatus === "CONNECTED" || sessionStatus === "CONNECTING") {
@@ -345,71 +309,15 @@ function App() {
   };
 
   useEffect(() => {
-    const storedPushToTalkUI = localStorage.getItem("pushToTalkUI");
-    if (storedPushToTalkUI) {
-      setIsPTTActive(storedPushToTalkUI === "true");
-    }
     const storedLogsExpanded = localStorage.getItem("logsExpanded");
     if (storedLogsExpanded) {
       setIsEventsPaneExpanded(storedLogsExpanded === "true");
     }
-    const storedAudioPlaybackEnabled = localStorage.getItem(
-      "audioPlaybackEnabled"
-    );
-    if (storedAudioPlaybackEnabled) {
-      setIsAudioPlaybackEnabled(storedAudioPlaybackEnabled === "true");
-    }
   }, []);
-
-  useEffect(() => {
-    localStorage.setItem("pushToTalkUI", isPTTActive.toString());
-  }, [isPTTActive]);
 
   useEffect(() => {
     localStorage.setItem("logsExpanded", isEventsPaneExpanded.toString());
   }, [isEventsPaneExpanded]);
-
-  useEffect(() => {
-    localStorage.setItem(
-      "audioPlaybackEnabled",
-      isAudioPlaybackEnabled.toString()
-    );
-  }, [isAudioPlaybackEnabled]);
-
-  useEffect(() => {
-    if (audioElementRef.current) {
-      if (isAudioPlaybackEnabled) {
-        audioElementRef.current.muted = false;
-        audioElementRef.current.play().catch((err) => {
-          console.warn("Autoplay may be blocked by browser:", err);
-        });
-      } else {
-        // Mute and pause to avoid brief audio blips before pause takes effect.
-        audioElementRef.current.muted = true;
-        audioElementRef.current.pause();
-      }
-    }
-
-    // Toggle server-side audio stream mute so bandwidth is saved when the
-    // user disables playback. 
-    try {
-      mute(!isAudioPlaybackEnabled);
-    } catch (err) {
-      console.warn('Failed to toggle SDK mute', err);
-    }
-  }, [isAudioPlaybackEnabled]);
-
-  // Ensure mute state is propagated to transport right after we connect or
-  // whenever the SDK client reference becomes available.
-  useEffect(() => {
-    if (sessionStatus === 'CONNECTED') {
-      try {
-        mute(!isAudioPlaybackEnabled);
-      } catch (err) {
-        console.warn('mute sync after connect failed', err);
-      }
-    }
-  }, [sessionStatus, isAudioPlaybackEnabled]);
 
   useEffect(() => {
     if (sessionStatus === "CONNECTED" && audioElementRef.current?.srcObject) {
@@ -440,7 +348,7 @@ function App() {
             fontWeight: '400',
             letterSpacing: '0.05em'
           }}>
-            AGENT13<span className="cursor-animate">_</span>
+            Ascendia AI<span className="cursor-animate">_</span>
           </div>
         </div>
         <div className="flex items-center flex-wrap gap-2">
@@ -525,15 +433,8 @@ function App() {
       <BottomToolbar
         sessionStatus={sessionStatus}
         onToggleConnection={onToggleConnection}
-        isPTTActive={isPTTActive}
-        setIsPTTActive={setIsPTTActive}
-        isPTTUserSpeaking={isPTTUserSpeaking}
-        handleTalkButtonDown={handleTalkButtonDown}
-        handleTalkButtonUp={handleTalkButtonUp}
         isEventsPaneExpanded={isEventsPaneExpanded}
         setIsEventsPaneExpanded={setIsEventsPaneExpanded}
-        isAudioPlaybackEnabled={isAudioPlaybackEnabled}
-        setIsAudioPlaybackEnabled={setIsAudioPlaybackEnabled}
         codec={urlCodec}
         onCodecChange={handleCodecChange}
       />

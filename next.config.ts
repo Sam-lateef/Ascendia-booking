@@ -12,11 +12,21 @@ const nextConfig: NextConfig = {
   },
   // Enable standalone output for Fly.io deployment (reduces Docker image size)
   output: 'standalone',
-   async redirects() {
+  // Exclude retell folder from Next.js compilation (it's a standalone server)
+  webpack: (config, { isServer }) => {
+    if (isServer) {
+      config.externals = config.externals || [];
+      config.externals.push({
+        'express-ws': 'commonjs express-ws',
+      });
+    }
+    return config;
+  },
+  async redirects() {
     return [
      {
        source: '/',
-        destination: '/agent-ui?agentConfig=dental',
+        destination: '/admin/booking',
         permanent: false,
       },
      ];

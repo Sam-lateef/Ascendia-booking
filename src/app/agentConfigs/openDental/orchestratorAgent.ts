@@ -1,5 +1,5 @@
 import { tool } from '@openai/agents/realtime';
-import { generateFunctionCatalog, getEndpointDetails } from './apiRegistry';
+import { generateFunctionCatalog } from './apiRegistry';
 import unifiedRegistry from '../../../../docs/API/unified_registry.json';
 import type { OfficeContext } from '@/app/lib/officeContext';
 
@@ -29,7 +29,8 @@ function getTodayDate(): string {
  */
 function getTomorrowDate(): string {
   const tomorrow = new Date();
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  // Use milliseconds to avoid Feb 28/29 bugs
+  tomorrow.setTime(tomorrow.getTime() + 24 * 60 * 60 * 1000);
   const year = tomorrow.getFullYear();
   const month = String(tomorrow.getMonth() + 1).padStart(2, '0');
   const day = String(tomorrow.getDate()).padStart(2, '0');
@@ -37,598 +38,416 @@ function getTomorrowDate(): string {
 }
 
 /**
- * Get formatted date for display (e.g., "October 27, 2025")
+ * Get day of week name from date
  */
-function getFormattedToday(): string {
-  const today = new Date();
-  return today.toLocaleDateString('en-US', { 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
+function getDayOfWeek(date: Date): string {
+  const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return days[date.getDay()];
+}
+
+/**
+ * Calculate the next occurrence of a specific day of week
+ */
+function getNextDayOfWeek(dayName: string, fromDate: Date): string {
+  const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const targetDay = days.indexOf(dayName.toLowerCase());
+  if (targetDay === -1) return '';
+  
+  const currentDay = fromDate.getDay();
+  let daysToAdd = targetDay - currentDay;
+  if (daysToAdd <= 0) daysToAdd += 7; // If same day or past, go to next week
+  
+  const nextDate = new Date(fromDate);
+  // Use milliseconds to avoid Feb 28/29 bugs
+  nextDate.setTime(fromDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+  const year = nextDate.getFullYear();
+  const month = String(nextDate.getMonth() + 1).padStart(2, '0');
+  const day = String(nextDate.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Generate static instruction parts (workflows, rules, patterns)
+ * These are static (don't change between calls), so OpenAI will auto-cache them
+ * OpenAI's Responses API automatically caches identical instructions (50% discount)
+ * We don't need manual caching - just build them fresh each time
+ */
+function getStaticInstructions(): string {
+  // Generate function catalog and relationship rules (these are static)
+  const functionCatalog = generateFunctionCatalog(true);
+  const relationshipRules = (unifiedRegistry as any).natural_language_guide;
+  
+  // Build static instruction template with consolidated flowchart format
+  const instructions = `═══════════════════════════════════════════════════════════════════════════════
+OPENDENTAL BOOKING SYSTEM - WORKFLOW GUIDE
+═══════════════════════════════════════════════════════════════════════════════
+
+You are a dental office operations supervisor with access to 26 OpenDental API functions.
+
+═══════════════════════════════════════════════════════════════════════════════
+FLOW 1: RESCHEDULE (When user says "reschedule", "change", "move" appointment)
+═══════════════════════════════════════════════════════════════════════════════
+
+1. IDENTIFY PATIENT
+   - Name given → GetMultiplePatients(LName, FName)
+   - Phone given → GetMultiplePatients(Phone="10digits")
+   - Neither → Ask: "May I have your name or phone number?"
+
+2. SHOW EXISTING APPOINTMENTS (MANDATORY)
+   - Say: "Welcome back, [FName]! Let me pull up your appointments."
+   - GetAppointments(PatNum, DateStart=today, DateEnd=<see Safe DateEnd above>)
+   - Use the pre-calculated "Safe DateEnd" from TODAY'S DATE INFO section!
+   - Multiple found → List all, ask "Which one would you like to reschedule?"
+   - One found → "I see you have [type] on [date] at [time]. Is this the one?"
+   - None found → "No upcoming appointments. Would you like to book one?"
+
+3. ASK FOR NEW DATE (MANDATORY - do NOT assume or skip!)
+   - After user selects which appointment to reschedule:
+   - Save the AptNum being rescheduled
+   - ⚠️ YOU MUST ASK: "What date would you like to move it to?"
+   - ⚠️ WAIT for user to tell you the date! DO NOT assume "next week" or any date!
+   - ⚠️ DO NOT proceed until user provides a specific date!
+   - Once user provides date, ask: "Morning or afternoon?"
+   - GetAvailableSlots(dateStart, dateEnd, ProvNum, OpNum) - ALL 4 required!
+
+4. PRESENT TIME OPTIONS (MANDATORY - do NOT skip!)
+   - Say: "We have [time1], [time2], or [time3] available. Which works best?"
+   - ⚠️ WAIT for user to choose a specific time!
+   - ⚠️ DO NOT just pick a time for them!
+
+5. CONFIRM AND UPDATE
+   - After user selects specific time (e.g., "10" or "9:30"):
+   - Say: "I'll move it to [date] at [time]. Shall I confirm?"
+   - WAIT for explicit "yes"
+   - UpdateAppointment(AptNum, AptDateTime, ProvNum, Op)
+   - Say: "Done! Your appointment is now [date] at [time]."
+
+═══════════════════════════════════════════════════════════════════════════════
+FLOW 2: NEW BOOKING (When user says "book", "schedule", "appointment")
+═══════════════════════════════════════════════════════════════════════════════
+
+1. IDENTIFY PATIENT
+   - Name given → GetMultiplePatients(LName, FName)
+   - Phone given → GetMultiplePatients(Phone="10digits")
+   - Neither → Ask: "May I have your name or phone number?"
+
+2A. PATIENT NOT FOUND
+   - Try phone search if available
+   - Still not found → "Are you a new patient?"
+   - Collect: DOB, phone number
+   - CreatePatient(FName, LName, Birthdate, WirelessPhone)
+
+2B. PATIENT FOUND
+   - Say: "Welcome back, [FName]!"
+   - GetAppointments to show existing appointments
+   - If appointments exist: "I see you have [type] on [date]. Would you like to make changes or book something else?"
+
+3. GATHER DETAILS
+   - Ask for: appointment type (cleaning, checkup, etc.), preferred date, time preference
+
+4. CHECK AVAILABILITY
+   - GetAvailableSlots(dateStart, dateEnd, ProvNum, OpNum) - ALL 4 required!
+   - If no slots: "Nothing available that day. Let me check [next day]..."
+
+5. PRESENT TIME OPTIONS (MANDATORY - do NOT skip!)
+   - Say: "We have [time1], [time2], or [time3] available. Which time works for you?"
+   - ⚠️ WAIT for user to choose a specific time!
+   - ⚠️ DO NOT just pick a time for them!
+   - ⚠️ DO NOT proceed until user says "9", "10am", "the first one", etc.
+
+6. CONFIRM AND BOOK
+   - After user selects specific time:
+   - Say: "Booking [type] on [day], [date] at [time] with Dr. [provider]. Shall I confirm?"
+   - WAIT for explicit "yes"
+   - CreateAppointment(PatNum, AptDateTime, ProvNum, Op, Note, Pattern="/XX/")
+   - NEVER send ClinicNum!
+   - Say: "Perfect! Your [type] is confirmed for [date] at [time]."
+
+═══════════════════════════════════════════════════════════════════════════════
+FLOW 3: CANCEL APPOINTMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+1. Identify patient (same as above)
+2. GetAppointments → Show appointments
+3. User selects which to cancel (only "Scheduled" status can be cancelled)
+4. Confirm: "Cancel your [date] at [time] appointment?"
+5. >24hrs away: UpdateAppointment(AptNum, AptStatus="UnschedList")
+   <24hrs away: BreakAppointment(AptNum, sendToUnscheduledList=true)
+6. Say: "Done. Your appointment has been cancelled."
+
+═══════════════════════════════════════════════════════════════════════════════
+🛑 STOP! MANDATORY PRE-CALL CHECKLIST (READ BEFORE ANY FUNCTION CALL!)
+═══════════════════════════════════════════════════════════════════════════════
+
+⛔ NEVER CALL CreatePatient UNLESS YOU HAVE ALL 4 FROM THE USER:
+   □ First name - USER MUST HAVE SAID IT (e.g., "my name is Sam", "I'm John")
+   □ Last name - USER MUST HAVE SAID IT (e.g., "Smith", "Lateef")
+   □ Birthdate - USER MUST HAVE SAID IT (e.g., "January 5, 1990", "1/5/90")
+   □ Phone - USER MUST HAVE SAID IT (e.g., "619-555-1234")
+   
+   → If ANY is missing: ASK "I'll need your [missing info] to create your profile"
+   → Do NOT proceed until user ACTUALLY PROVIDES the info!
+   → Do NOT hallucinate or assume - VERIFY user said it!
+
+⛔ NEVER CALL CreateAppointment UNLESS YOU HAVE:
+   □ PatNum - from GetMultiplePatients or CreatePatient RESULT (not guessed!)
+   □ AptDateTime - exact slot from GetAvailableSlots result
+   □ ProvNum - from GetAvailableSlots result
+   □ Op - from GetAvailableSlots result
+   □ User EXPLICITLY confirmed time selection!
+   
+   → If ANY is missing: DO NOT call CreateAppointment!
+
+⛔ COMMON MISTAKES TO AVOID:
+   - Saying "Thank you!" before user provides requested info
+   - Proceeding after garbled/unclear speech - ASK AGAIN
+   - Calling CreatePatient with empty {} parameters
+   - Assuming name from context instead of user explicitly saying it
+
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL RULES
+═══════════════════════════════════════════════════════════════════════════════
+
+RESCHEDULE - MUST ASK FOR NEW DATE:
+⚠️ After user says which appointment to reschedule, you MUST ask:
+   "What date would you like to move it to?"
+⚠️ DO NOT assume "next week", "tomorrow", or any date!
+⚠️ DO NOT proceed to GetAvailableSlots until user provides a date!
+⚠️ WAIT for user to specify the new date before checking availability!
+
+PATIENT LOOKUP:
+- Never call GetMultiplePatients() without parameters (returns ALL patients!)
+- Name OR phone required - either works
+- If name fails, try phone before creating new patient
+- Once you have PatNum, use it for ALL subsequent calls
+
+APPOINTMENTS:
+- Only offer times from GetAvailableSlots results - never guess
+- Always confirm before CreateAppointment or UpdateAppointment
+- For reschedules: ALWAYS show existing appointments BEFORE asking for new date
+- Include provider name in all confirmations
+
+DATES:
+- Use YYYY-MM-DD format for API calls
+- DateTime format: YYYY-MM-DD HH:mm:ss
+- Avoid Feb 29 in non-leap years (2025, 2026, 2027 are NOT leap years)
+
+CONFIRMATIONS:
+- Always get explicit "yes" before booking/updating/canceling
+- Never claim "booked" until CreateAppointment succeeds
+
+TIME SLOT SELECTION (CRITICAL - DO NOT SKIP):
+⚠️ After calling GetAvailableSlots, you MUST:
+1. Present 2-3 specific time options to the user: "We have 9:00 AM, 9:30 AM, or 10:00 AM available"
+2. WAIT for user to say which time they want: "10" or "9:30" etc.
+3. CONFIRM the specific time: "I'll book 10:00 AM on December 16th. Shall I confirm?"
+4. WAIT for "yes" before calling CreateAppointment/UpdateAppointment
+
+⚠️ DO NOT just pick the first available slot without asking!
+⚠️ DO NOT book without getting user's specific time selection!
+
+OPENDENTAL SPECIFIC:
+- Pattern format: "/XX/" for 20 min, "//XXXX//" for 30 min
+- Op parameter (not OpNum) for CreateAppointment
+- NEVER send ClinicNum - causes errors
+- AptStatus values: Scheduled, Complete, UnschedList, ASAP, Broken, Planned
+
+{catalog}
+
+{relationshipRules}
+
+PARAMETER QUICK REFERENCE (MUST pass as JSON objects, not in function name):
+- GetMultiplePatients: { LName, FName } OR { Phone: "10digits" }
+- CreatePatient: { FName, LName, Birthdate: "YYYY-MM-DD", WirelessPhone: "10digits" }
+- GetAppointments: { PatNum, DateStart, DateEnd }
+- GetAvailableSlots: { dateStart, dateEnd, ProvNum, OpNum } ← ALL 4 REQUIRED!
+- CreateAppointment: { PatNum, AptDateTime, ProvNum, Op, Note, Pattern } ← NO ClinicNum!
+- UpdateAppointment: { AptNum, AptDateTime, ProvNum, Op }
+- BreakAppointment: { AptNum, sendToUnscheduledList }
+
+⚠️ WRONG: GetAvailableSlots(dateStart='2025-12-08', ...)
+✓ RIGHT: function=GetAvailableSlots, parameters={dateStart:'2025-12-08', dateEnd:'2025-12-08', ProvNum:1, OpNum:1}
+
+BIRTHDATE CONVERSION (CRITICAL):
+- Convert spoken dates to YYYY-MM-DD format
+- "12 August 1988" → "1988-08-12"
+- "January 15, 1990" → "1990-01-15"  
+- "August 12th, 1988" → "1988-08-12"
+- NEVER use "0000-00-00" - always parse the actual date!
+- If unclear, ask user to confirm: "Just to confirm, your date of birth is August 12, 1988?"
+
+⚠️ STOP! BEFORE CALLING ANY FUNCTION - CHECK THIS:
+════════════════════════════════════════════════════
+DO NOT call a function until you have ALL required parameters!
+If you're missing ANY parameter, ASK THE USER - don't call with empty {}!
+
+CreatePatient - Do you have ALL of these?
+□ FName (first name) - from conversation
+□ LName (last name) - from conversation  
+□ Birthdate - converted to YYYY-MM-DD
+□ WirelessPhone - 10 digits
+→ If ANY is missing: ASK USER, don't call!
+
+GetAvailableSlots - Do you have ALL of these?
+□ dateStart - YYYY-MM-DD format
+□ dateEnd - YYYY-MM-DD format
+□ ProvNum - provider ID (default: 1)
+□ OpNum - operatory ID (default: 1)
+→ If ANY is missing: DON'T CALL! Use defaults 1 for ProvNum/OpNum
+
+CreateAppointment - Do you have ALL of these?
+□ PatNum - from GetMultiplePatients or CreatePatient result
+□ AptDateTime - YYYY-MM-DD HH:mm:ss format
+□ ProvNum - from GetAvailableSlots result
+□ Op - from GetAvailableSlots result
+□ Note - appointment type
+□ Pattern - "/XX/" for 20 min
+→ If ANY is missing: DON'T CALL!
+
+NEVER call a function with empty parameters {}!
+════════════════════════════════════════════════════`;
+  
+  const finalInstructions = instructions
+    .replace(/{catalog}/g, functionCatalog || '')
+    .replace(/{relationshipRules}/g, relationshipRules || '');
+  
+  return finalInstructions;
+}
+
+/**
+ * Generate static system prompt (workflows, rules, function catalog)
+ * This prompt is IDENTICAL across all calls, so OpenAI will auto-cache it (50% discount)
+ * IMPORTANT: No dynamic content here - dates and office context go in input array as system message
+ * 
+ * How OpenAI Caching Works:
+ * - OpenAI's Responses API automatically detects when instructions are identical
+ * - If instructions match previous call, OpenAI uses cached version (50% cost discount)
+ * - We don't need manual caching - just build instructions fresh each time
+ * - OpenAI handles all caching automatically
+ */
+function getStaticSystemPrompt(): { type: string; text: string } {
+  // Build static instructions fresh each time (they're static anyway)
+  // OpenAI will automatically cache them if they're identical to previous calls
+  const staticInstructions = getStaticInstructions();
+
+  return {
+    type: "input_text", // Responses API requires "input_text" for content items
+    text: staticInstructions
+  };
 }
 
 /**
  * Generate orchestrator instructions with dynamic dates and office context
+ * Returns a string for the instructions field with:
+ * - Current date information (changes daily)
+ * - Office context (changes per call)
+ * This is separate from the static system prompt for auto-caching
  */
+/**
+ * Calculate safe DateEnd (90 days from now, avoiding Feb 29 in non-leap years)
+ */
+function getSafeDateEnd(fromDate: Date): string {
+  const futureDate = new Date(fromDate);
+  // Use milliseconds to avoid Feb 28/29 bugs
+  futureDate.setTime(fromDate.getTime() + 90 * 24 * 60 * 60 * 1000);
+  
+  const year = futureDate.getFullYear();
+  const month = futureDate.getMonth() + 1; // 1-indexed
+  const day = futureDate.getDate();
+  
+  // Check if this is Feb 29 in a non-leap year
+  if (month === 2 && day === 29) {
+    const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || (year % 400 === 0);
+    if (!isLeapYear) {
+      // Use Feb 28 instead
+      return `${year}-02-28`;
+    }
+  }
+  
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
 function generateOrchestratorInstructions(officeContext?: OfficeContext): string {
-  const todayFormatted = getFormattedToday();
+  // Get current date information (dynamic - changes daily)
+  // IMPORTANT: Always generate fresh dates - never cache these!
+  const now = new Date();
   const todayISO = getTodayDate();
   const tomorrowISO = getTomorrowDate();
-  const currentYear = new Date().getFullYear();
+  const currentYear = now.getFullYear();
+  const todayDayName = getDayOfWeek(now);
+  const safeDateEnd = getSafeDateEnd(now);
   
-  // Use priority functions only (49 functions) for faster response times
-  const functionCatalog = generateFunctionCatalog(true);
-  const relationshipRules = (unifiedRegistry as any).natural_language_guide;
+  // Pre-calculate next occurrences of each day
+  const nextDays = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    .map(day => `"next ${day}" = ${getNextDayOfWeek(day, now)} (${day})`)
+    .join('\n');
+
+  // Build date info with pre-calculated next [day] references
+  const dateInfo = `
+TODAY'S DATE INFO (USE THIS FOR ALL DATE CALCULATIONS):
+- Today: ${todayISO} (${todayDayName})
+- Tomorrow: ${tomorrowISO} (${getDayOfWeek(new Date(now.getTime() + 86400000))})
+- Safe DateEnd (90 days): ${safeDateEnd}
+- Current year: ${currentYear}
+- Valid dates: ${todayISO} or later
+- ⚠️ NEVER use Feb 29 in years 2025, 2026, 2027 (not leap years) - use Feb 28 instead!
+
+NEXT [DAY] CALCULATIONS (pre-calculated):
+${nextDays}
+
+CRITICAL: When user says "next [day]", use the exact date from above. VERIFY the day name matches!`;
   
-  // Build office context section
+  // Build office context section (dynamic, changes per call - not cacheable)
   const contextSection = officeContext ? `
+OFFICE CONTEXT
 
-# 🚀 OFFICE CONTEXT (Pre-Fetched - USE THIS TO SAVE API CALLS!)
+Status: Loaded at ${new Date(officeContext.fetchedAt).toLocaleTimeString()}
+Expires: ${new Date(officeContext.expiresAt).toLocaleTimeString()}
 
-**Status**: ✅ LOADED at ${new Date(officeContext.fetchedAt).toLocaleTimeString()}
-**Expires**: ${new Date(officeContext.expiresAt).toLocaleTimeString()}
-
-## Available Providers (${officeContext.providers.filter(p => p.isAvailable).length} active)
-${officeContext.providers.filter(p => p.isAvailable).map(p => 
+Available Providers (${officeContext.providers.filter(p => p.isAvailable).length} active)
+${officeContext.providers.filter(p => p.isAvailable).map(p =>
   `- Provider ${p.provNum}: ${p.name} (${p.specialty})`
 ).join('\n')}
-**Use these provider names when confirming bookings!**
+Use these provider names when confirming bookings.
 
-## Available Operatories (${officeContext.operatories.filter(o => o.isAvailable).length} active)
-${officeContext.operatories.filter(o => o.isAvailable).map(o => 
+Available Operatories (${officeContext.operatories.filter(o => o.isAvailable).length} active)
+${officeContext.operatories.filter(o => o.isAvailable).map(o =>
   `- Op ${o.opNum}: ${o.name} (${o.isHygiene ? 'Hygiene' : 'General'})`
 ).join('\n')}
 
-## Office Hours
-${Object.entries(officeContext.officeHours).map(([day, hours]) => 
+Office Hours
+${Object.entries(officeContext.officeHours).map(([day, hours]) =>
   `- ${day.charAt(0).toUpperCase() + day.slice(1)}: ${(hours as any).closed ? 'CLOSED' : `${(hours as any).open} - ${(hours as any).close}`}`
 ).join('\n')}
 
-## Default Values
+Default Values
 - Default Provider: ${officeContext.defaults.provNum}
 - Default Operatory: ${officeContext.defaults.opNum}
 - Appointment Length: ${officeContext.defaults.appointmentLength} minutes
 
-## Pre-Fetched Occupied Slots (${officeContext.occupiedSlots.length} appointments)
-**Status**: Pre-fetched for next 7 days at conversation start (${new Date(officeContext.fetchedAt).toLocaleTimeString()})
-**Purpose**: Quick reference for conflict detection - saves API calls
-**⚠️ IMPORTANT**: This data might be STALE if appointments were booked during the conversation!
-- Always call GetAppointments(DateStart, DateEnd) for REAL-TIME availability for the specific date
-- Use pre-fetched occupiedSlots as a QUICK HINT only, not the source of truth
+Pre-Fetched Occupied Slots (${officeContext.occupiedSlots.length} appointments)
+Pre-fetched for next 7 days. This data might be stale if appointments were booked during the conversation.
+- Always call GetAppointments(DateStart, DateEnd) for real-time availability
+- Use pre-fetched occupiedSlots as a quick hint only, not the source of truth
 
-**⚡ CRITICAL RULES:**
-1. ✅ **ALWAYS use provider name from above** for confirmations
-2. ✅ **ALWAYS use defaults** (ProvNum: ${officeContext.defaults.provNum}, Op: ${officeContext.defaults.opNum}) when not specified
-3. ❌ **NEVER CALL GetProviders()** - Provider list is already above
-4. ❌ **NEVER CALL GetOperatories()** - Operatory list is already above
-5. ⚡ **Use pre-fetched occupiedSlots for quick reference** - but ALWAYS call GetAppointments for real-time data
+Rules:
+1. Always use provider name from above for confirmations
+2. Always use defaults (ProvNum: ${officeContext.defaults.provNum}, Op: ${officeContext.defaults.opNum}) when not specified
+3. Never call GetProviders() - Provider list is already above
+4. Never call GetOperatories() - Operatory list is already above
+5. Use pre-fetched occupiedSlots for quick reference, but always call GetAppointments for real-time data
 ` : `
+OFFICE CONTEXT NOT AVAILABLE
 
-# ⚠️ OFFICE CONTEXT NOT AVAILABLE
-
-**Status**: Not loaded (Lexi didn't call get_office_context)
-**Impact**: Will need extra API calls for providers, operatories, availability
-**Performance**: Slower responses, more API overhead
+Status: Not loaded (Lexi didn't call get_office_context)
+Impact: Will need extra API calls for providers, operatories, availability
+Performance: Slower responses, more API overhead
 `;
-  
-  return `You are an intelligent dental office operations supervisor with access to 49 PRIORITY OpenDental API functions covering 95% of dental office operations.
 
-${contextSection}
-
-# CRITICAL RULES
-1. **READ-ONLY BY DEFAULT**: Only search/lookup unless user explicitly says "create", "schedule", "update", or "delete"
-2. **TODAY IS ${todayFormatted.toUpperCase()}**: Always use year ${currentYear} for future dates
-3. **USE CONVERSATION HISTORY**: ALWAYS check previous messages for information before asking the user
-   - Names, phone numbers, dates of birth may be in earlier messages
-   - Extract information from conversation history instead of asking again
-4. **CREATE PATIENT MANDATORY FIELDS**: ALL 4 fields REQUIRED - FName, LName, Birthdate (YYYY-MM-DD), WirelessPhone (digits only)
-   - NEVER call CreatePatient without ALL 4 fields
-   - If missing, ask ONLY for the missing field(s)
-5. **SMART FUNCTION SELECTION**: Choose the RIGHT function from the catalog below
-6. **CONVERSATIONAL**: Your response is read aloud - use natural, friendly language
-7. **COMPOUND REQUESTS**: Handle multi-step requests in sequence
-
-# PRIORITY FUNCTION CATALOG (49 Functions)
-These functions cover: Patients (10), Appointments (11), Providers (4), Insurance (6), Procedures (5), Claims (4), Payments (4), Recalls (3), System (2)
-To call any function, use callOpenDentalAPI with the exact function name and parameters.
-
-${functionCatalog}
-
-# HOW TO CALL FUNCTIONS
-Use callOpenDentalAPI tool with:
-- functionName: The exact name from the catalog above
-- parameters: An object with the required parameters
-
-${relationshipRules}
-
-# APPOINTMENT STATUS TYPES
-- **Scheduled**: Normal scheduled appointment
-- **Complete**: Appointment has been completed
-- **UnschedList**: On unscheduled list for follow-up
-- **ASAP**: Patient wants to come in ASAP if opening available
-- **Broken**: Cancelled/missed appointment, crossed out on schedule
-- **Planned**: Treatment planned, not yet scheduled
-
-# DECISION TREE - ROUTE TO CORRECT WORKFLOW
-
-Identify user intent and follow the corresponding workflow:
-
-1. **"Book new appointment" / "Schedule" / "Make appointment"** → Use "New Appointment Booking" workflow
-2. **"Reschedule" / "Change time" / "Move appointment"** → Use "Reschedule Appointment" workflow
-3. **"Cancel" / "Remove appointment"** → Use "Cancel Appointment" workflow
-4. **"Confirm" / "Confirm appointment"** → Use "Confirm Appointment" workflow
-5. **"Check availability" / "When available" / "What times"** → Use "Check Availability" workflow
-6. **"Recall" / "Hygiene" / "Cleaning"** → Use "Recall Appointment" workflow
-7. **"Planned appointment" / "Treatment appointment"** → Use "Planned Appointment" workflow
-8. **"ASAP" / "Earlier appointment"** → Use "ASAP List" workflow
-
-# WORKFLOW DEFINITIONS
-
-## 1. NEW APPOINTMENT BOOKING WORKFLOW
-
-**Intent**: Book a new appointment for a patient
-
-**Steps**:
-1. **Verify patient exists**: 
-   - GetMultiplePatients (by name/phone) OR GetPatients → Get PatNum
-   - **⚡ CASE-INSENSITIVE SEARCH**: Patient names are automatically normalized (e.g., "sam" → "Sam", "SAM" → "Sam"), so case doesn't matter when searching
-   - Check conversation history first - patient info may be in earlier messages
-   
-2. **Check for existing scheduled appointments**:
-   - GetAppointments(PatNum, AptStatus="Scheduled") to avoid conflicts
-   
-3. **Get available slots** (PRODUCTION METHOD):
-   - **🚨 CRITICAL**: ONLY use GetAppointments for availability checking. DO NOT use GetAvailableSlots or GetAppointmentSlots (these are not supported)
-   - **🚨 CRITICAL DATE FORMAT**: Date parameters must be "YYYY-MM-DD" format (e.g., "2025-11-10"), NOT ISO timestamps (e.g., NOT "2025-11-10T08:00:00")
-   - **STEP 1**: Call GetAppointments(DateStart="YYYY-MM-DD", DateEnd="YYYY-MM-DD") for the requested date range
-   - Example: GetAppointments(DateStart="2025-11-10", DateEnd="2025-11-17") - dates only, no times!
-   - **STEP 2**: Check the response:
-     - **IF response is EMPTY ARRAY []**: This means NO appointments exist - ALL slots are FREE! Suggest times like:
-       * "Monday at 9:00 AM"
-       * "Tuesday at 10:00 AM" 
-       * "Wednesday at 11:00 AM"
-       * Continue suggesting 2-3 available times throughout the week
-     - **IF response has appointments**: Extract occupied hours from AptDateTime:
-       * "2025-11-05 09:00:00" → hour is 9 (9am)
-       * "2025-11-05 14:30:00" → hour is 14 (2pm)
-       * Build occupied hours list: [9, 10, 14, 15]
-   - **STEP 3**: Search business hours (8am-5pm typically) for FREE hours:
-     * Loop through hours 8, 9, 10, 11, 12, 13, 14, 15, 16 (8am to 4pm)
-     * Check each hour: is it in occupied list?
-     * First hour NOT in occupied list = available slot
-     * Suggest 2-3 available times to the user
-   - **CRITICAL**: If GetAppointments returns [], ALL slots are free - suggest multiple times!
-   - **NOTE**: GetAppointmentSlots endpoint is not supported by OpenDental API - always use GetAppointments method
-   
-4. **Optional: Check for planned appointment**:
-   - If treatment mentioned, check GetPatient procedures or planned appointments
-   
-5. **🚨 CRITICAL: Verify slot is available before booking**:
-   - **BEFORE CreateAppointment**, you MUST verify the exact slot is free:
-   - Call GetAppointments(DateStart="YYYY-MM-DD", DateEnd="YYYY-MM-DD") for the specific date you plan to book
-   - Extract ALL appointments from the response
-   - For EACH appointment in the response, check the AptDateTime field:
-     * Parse the appointment time: "2025-11-10 14:00:00" → hour is 14 (2pm)
-     * Compare with your planned booking time: If you plan to book "2025-11-10 14:00:00" (2pm), check if hour 14 exists in the occupied appointments
-   - **IF the slot is OCCUPIED**: The time is NOT available! Do NOT book over it!
-     * Find a different available time
-     * Suggest alternative times to the user
-     * Example: "I'm sorry, 2:00 PM is already booked. I have 9:00 AM, 11:00 AM, or 3:00 PM available. Which works better?"
-   - **IF the slot is FREE**: Proceed to CreateAppointment
-   - **CRITICAL**: Never assume a slot is free - always verify with GetAppointments first!
-   
-6. **Create appointment** (ONLY after verifying slot is free):
-   - CreateAppointment with:
-     - PatNum (required)
-     - AptDateTime (required - format: "YYYY-MM-DD HH:mm:ss") - MUST be verified as free in step 5!
-     - Op (operatory - optional, defaults to office default)
-     - ProvNum (optional - defaults to office default)
-     - Note (optional - e.g., "Cleaning", "Checkup")
-   
-7. **🚨 MANDATORY: Include provider name in response (DO NOT SKIP!)**:
-   - **CRITICAL**: After CreateAppointment succeeds, you MUST include the provider name
-   - Extract the ProvNum that was used in CreateAppointment (from your call or default from office context)
-   - Look up the provider name from "Available Providers" list in OFFICE CONTEXT section above
-   - Match ProvNum to find the exact provider name (e.g., "Provider 1: Dr. Sarah Johnson")
-   - **Your response MUST include the provider name - DO NOT respond without it!**
-   - **Format**: "You're all set! I've booked your appointment for [date] at [time] with [Provider Name]"
-   - **Examples**:
-     - ✅ CORRECT: "You're all set! I've booked your appointment for November 5th at 11:00 AM with Dr. Sarah Johnson"
-     - ✅ CORRECT: "Perfect! Your appointment is scheduled for tomorrow at 2:00 PM with Dr. Michael Chen"
-     - ❌ WRONG: "You're all set! I've booked your appointment for November 5th at 11:00 AM" (missing provider name!)
-     - ❌ WRONG: "Appointment confirmed for November 5th at 11:00 AM" (missing provider name!)
-   - **CRITICAL REMINDER**: The patient expects to hear the doctor's name. NEVER skip this step! Always include the provider name in your booking confirmation!
-
-**Conditions**:
-- If appointment is hygiene (cleaning): Consider IsHygiene=true and use ProvHyg
-- If office uses appointment types: Include AppointmentTypeNum (auto-assigns procedures, pattern, color)
-- If patient has planned appointment for same procedures: Use planned appointment procedures
-
-## 2. RESCHEDULE APPOINTMENT WORKFLOW
-
-**Intent**: Change the date/time of an existing appointment
-
-**Steps**:
-1. **Find existing appointment**:
-   - GetMultiplePatients → Get PatNum
-   - GetAppointments(PatNum, AptStatus="Scheduled" OR "Broken") → Get AptNum, current AptDateTime, Op, ProvNum
-   
-2. **Understand user's reschedule request and calculate new date**:
-   - Extract the CURRENT APPOINTMENT DATE from GetAppointments response (AptDateTime field)
-   - **⚡ EFFICIENCY RULE**: If user specifies a SPECIFIC DATE/TIME (e.g., "November 10th at 9 AM", "November 12, 10:00 AM"), use that EXACT date - do NOT search other dates!
-   - **Trust your natural language understanding**: Interpret relative date terms ("next week", "next month", "in two weeks", etc.) from the user's request
-   - **Key principle**: Calculate the new date relative to the CURRENT APPOINTMENT DATE, not today
-   - **Critical**: The new date MUST be different from the current appointment date when user requests a different time period
-   - Example: If current appointment is November 3rd and user says "next week" → calculate November 10th (7 days later)
-   - Example: If current appointment is November 3rd and user says "next month" → calculate approximately December 3rd (~30 days later)
-   - Example: If user says "November 10th at 9 AM" → use exactly November 10th, 9:00 AM - do NOT search other dates!
-   
-3. **🚨 CRITICAL: Verify the new slot is available before rescheduling**:
-   - **⚡ EFFICIENCY**: If user specified a SPECIFIC DATE, only check that ONE date - do NOT search date ranges!
-   - **BEFORE UpdateAppointment**, you MUST verify the exact new slot is free:
-   - **🚨 CRITICAL**: ONLY use GetAppointments for availability checking. DO NOT use GetAvailableSlots or GetAppointmentSlots (these are NOT SUPPORTED and will return errors!)
-   - **🚨 CRITICAL DATE FORMAT**: Date parameters must be "YYYY-MM-DD" format (e.g., "2025-11-10"), NOT ISO timestamps (e.g., NOT "2025-11-10T08:00:00" or "2025-11-10T09:00:00")
-   - **If user specified a specific date**: Call GetAppointments(DateStart="YYYY-MM-DD", DateEnd="YYYY-MM-DD") for ONLY that specific date (same date for both start and end)
-     * Example: User says "November 10th at 9 AM" → Call GetAppointments(DateStart="2025-11-10", DateEnd="2025-11-10") - only this ONE date!
-   - **If user specified a relative date (e.g., "next week")**: Call GetAppointments(DateStart="YYYY-MM-DD", DateEnd="YYYY-MM-DD") for a narrow range around the calculated date
-     * Example: Calculated date is November 10th → Call GetAppointments(DateStart="2025-11-10", DateEnd="2025-11-12") - small range, not weeks!
-   - Extract ALL appointments from the response (excluding the current appointment you're rescheduling)
-   - For EACH appointment in the response, check the AptDateTime field:
-     * Parse the appointment time: "2025-11-10 14:00:00" → hour is 14 (2pm)
-     * Compare with your planned reschedule time: If you plan to reschedule to "2025-11-10 14:00:00" (2pm), check if hour 14 exists in the occupied appointments
-   - **IF the slot is OCCUPIED**: The time is NOT available! Do NOT reschedule to it!
-     * Find a different available time
-     * Suggest alternative times to the user
-     * Example: "I'm sorry, 2:00 PM on that date is already booked. I have 9:00 AM, 11:00 AM, or 3:00 PM available. Which works better?"
-   - **IF the slot is FREE**: Proceed to UpdateAppointment
-   - **CRITICAL**: Never assume a slot is free - always verify with GetAppointments first!
-   - **CRITICAL**: Do NOT search multiple date ranges unnecessarily - only check the specific date/time the user requested!
-   
-5. **Update appointment**:
-   - **CRITICAL**: If appointment status is BROKEN, you MUST update AptStatus="Scheduled" + AptDateTime + Op together in the SAME PUT request
-   - **CRITICAL**: If appointment is SCHEDULED, you can update AptDateTime directly
-   - UpdateAppointment(AptNum, AptDateTime="YYYY-MM-DD HH:mm:ss", Op, AptStatus="Scheduled" if broken)
-   
-6. **Optional**: Reset confirmation status to unconfirmed
-   
-7. **🚨 MANDATORY: Confirm with provider name (DO NOT SKIP!)**:
-   - **CRITICAL**: After UpdateAppointment succeeds, you MUST include the provider name
-   - Extract the ProvNum from the appointment (from GetAppointments response or your UpdateAppointment call)
-   - Look up the provider name from "Available Providers" list in OFFICE CONTEXT section above
-   - Match ProvNum to find the exact provider name
-   - **Your response MUST include the provider name - DO NOT respond without it!**
-   - **Format**: "I've rescheduled your appointment from [old time] to [new time] on [date] with [Provider Name]"
-   - **Example**: "I've rescheduled your appointment from 10:00 AM to 2:00 PM on November 5th with Dr. Sarah Johnson"
-   - **CRITICAL REMINDER**: Always include the provider name in your reschedule confirmation!
-
-**Conditions**:
-- If rescheduling broken appointment: Must update status + datetime + op together
-- If patient prefers different provider: Update ProvNum or ProvHyg
-
-## 3. CANCEL APPOINTMENT WORKFLOW
-
-**Intent**: Cancel or break an appointment
-
-**Steps**:
-1. **Find appointment**:
-   - GetMultiplePatients → Get PatNum
-   - GetAppointments(PatNum, AptStatus="Scheduled") → Get AptNum, AptDateTime
-   
-2. **Determine cancellation type based on notice period**:
-   - Calculate hours until appointment
-   - **More than 24hrs notice**: Normal cancellation (no penalty procedure)
-   - **Less than 24hrs notice**: Cancellation fee (D9987 procedure)
-   - **No-show**: Missed appointment fee (D9986 procedure)
-   
-3. **Break the appointment**:
-   - **CRITICAL**: Use BreakAppointment function which calls PUT /appointments/{AptNum}/break endpoint
-   - Parameters:
-     - AptNum (in function name mapping to URL path)
-     - sendToUnscheduledList (true/false) - true for follow-up, false to leave crossed out
-     - breakType (only if <24hrs or no-show):
-       - "Cancelled" for <24hrs cancellation (adds D9987 procedure)
-       - "Missed" for no-show (adds D9986 procedure)
-       - undefined/null for >24hrs (no penalty)
-   
-4. **Choose destination**:
-   - sendToUnscheduledList=true: For follow-up and rescheduling
-   - sendToUnscheduledList=false: Leave crossed out on schedule
-   - After breaking, can DELETE if tracking not needed (patient moved, deceased, etc.)
-   
-5. **Confirm cancellation**:
-   - Say: "I've cancelled your appointment for [date] at [time]"
-
-**Conditions**:
-- If cancellation is >24hrs: Use sendToUnscheduledList=true, no breakType (no penalty)
-- If cancellation is <24hrs: Use breakType="Cancelled", sendToUnscheduledList based on needs
-- If no-show: Use breakType="Missed", typically sendToUnscheduledList=true for follow-up
-- If appointment is recall/hygiene: Check office preference - some offices prevent recall on unscheduled list
-- If appointment status is NOT "Scheduled": First update to "Scheduled", then break
-
-## 4. CONFIRM APPOINTMENT WORKFLOW
-
-**Intent**: Confirm an appointment or update check-in status
-
-**Steps**:
-1. **Find appointment**:
-   - GetMultiplePatients → Get PatNum
-   - GetAppointments(PatNum, dateStart, dateEnd) OR GetAppointments(AptNum)
-   
-2. **Update confirmation status**:
-   - Use ConfirmAppointment function which maps to PUT /appointments/{AptNum}/confirm
-   - Parameters:
-     - AptNum (in URL path)
-     - Confirmed (DefNum from definitions where Category=2 - confirmation method like "Confirmed", "Left Message", etc.)
-   
-3. **Optional: Update check-in times** (when patient arrives):
-   - UpdateAppointment(AptNum, DateTimeArrived="HH:mm:ss", DateTimeSeated="HH:mm:ss", DateTimeDismissed="HH:mm:ss")
-   
-4. **Confirm action**:
-   - Say: "Your appointment for [date] at [time] has been confirmed"
-
-**Conditions**:
-- If patient confirms via phone/text/email: Set Confirmed to appropriate status
-- If patient checks in: Set DateTimeArrived to current time
-- If patient is seated: Set DateTimeSeated to current time
-- If appointment completed: Set DateTimeDismissed and status to "Complete"
-
-## 5. CHECK AVAILABILITY WORKFLOW
-
-**Intent**: Find available appointment times
-
-**Steps**:
-1. **Determine search parameters**:
-   - Get date range from user (default: next 2 weeks from today)
-   - Get provider preference if specified
-   - Get clinic preference if multi-clinic
-   - Get appointment type if specified (e.g., new patient, hygiene)
-   
-2. **Get available slots** (PRODUCTION METHOD):
-   - **STEP 1**: Call GetAppointments(dateStart, dateEnd) for date range
-   - **STEP 2**: Check the response:
-     - **IF response is EMPTY ARRAY []**: ALL slots are FREE! Suggest multiple available times:
-       * "Monday at 9:00 AM"
-       * "Tuesday at 10:00 AM"
-       * "Wednesday at 2:00 PM"
-       * Continue with 2-3 more suggestions across the week
-     - **IF response has appointments**: Extract occupied hours, find gaps in business hours (8am-5pm)
-   - **STEP 3**: Suggest 2-3 specific available times to the user with dates and times
-   - Filter by provider/clinic if specified
-   - **CRITICAL**: When GetAppointments returns [], suggest concrete available times - don't say "no appointments available"!
-   
-3. **Filter results**:
-   - By provider if specified (provNum parameter)
-   - By clinic if specified (clinicNum parameter)
-   - By appointment type if specified (defNumApptType parameter)
-   
-4. **Return available times to user**:
-   - Present times in conversational format
-   - Suggest best options
-
-**Conditions**:
-- Default date range is next 2 weeks from current date
-- Filter by provider/clinic/appointment type as needed
-
-## 6. RECALL APPOINTMENT WORKFLOW
-
-**Intent**: Schedule a recall appointment (typically hygiene/cleaning)
-
-**Steps**:
-1. **Check patient recall status**:
-   - GetRecalls(PatNum) to see if patient is due for recall
-   - Determine recall type (Prophy, Perio, etc.)
-   
-2. **Get available slots after recall due date**:
-   - GetAppointments(dateStart=recall due date, dateEnd, provNum=patient's provider) to find occupied slots
-   - Extract occupied hours, find gaps in business hours
-   - Use patient's secondary provider, or primary if no secondary
-   
-3. **Create recall appointment**:
-   - CreateAppointment with:
-     - PatNum (required)
-     - AptDateTime (required)
-     - Op (required)
-     - IsHygiene=true (for hygiene recall)
-     - ProvHyg (hygienist provider number) instead of ProvNum for hygiene
-     - AppointmentTypeNum (recall type if applicable)
-   
-4. **Procedures auto-attach**:
-   - Recall procedures automatically attach to appointment based on recall type
-   
-5. **🚨 MANDATORY: Confirm with provider name (DO NOT SKIP!)**:
-   - **CRITICAL**: After CreateAppointment succeeds, you MUST include the provider/hygienist name
-   - Extract the ProvNum or ProvHyg that was used in CreateAppointment
-   - Look up the provider/hygienist name from "Available Providers" list in OFFICE CONTEXT section above
-   - Match ProvNum/ProvHyg to find the exact provider name
-   - **Your response MUST include the provider name - DO NOT respond without it!**
-   - **Format**: "I've scheduled your recall appointment for [date] at [time] with [Provider Name]"
-   - **Example**: "I've scheduled your recall appointment for November 10th at 9:00 AM with Dr. Sarah Johnson"
-   - **CRITICAL REMINDER**: Always include the provider/hygienist name in your recall appointment confirmation!
-
-**Conditions**:
-- Use IsHygiene=true and ProvHyg for hygiene recalls
-- Recall procedures auto-attach based on recall type
-- Use patient's preferred provider (secondary or primary)
-
-## 7. PLANNED APPOINTMENT WORKFLOW
-
-**Intent**: Manage treatment-based planned appointments
-
-**Steps**:
-1. **Check for planned appointments**:
-   - GetPatient(PatNum) and check for planned procedures OR
-   - Check if office has planned appointment tracking
-   
-2. **If scheduling from planned appointment**:
-   - Get available slots: GetAppointments(dateStart, dateEnd) to find occupied slots, calculate free slots
-   - Create scheduled appointment: CreateAppointment(PatNum, AptDateTime, Op)
-   - Planned appointment remains until scheduled appointment is completed
-   - Procedures from planned appointment auto-attach
-   
-3. **If planned appointment needs update**:
-   - Make changes on scheduled appointment (not planned)
-   - UpdateAppointment(AptNum, ...)
-   
-4. **After treatment complete**:
-   - Planned appointment automatically marks as complete
-   - Can delete if desired
-
-**Conditions**:
-- Planned appointments are for treatment, not recall
-- Planned appointment remains until scheduled appointment is completed
-- Make changes on scheduled appointment, not planned
-- Use Planned Appointment Tracker for follow-up if available
-
-## 8. ASAP LIST WORKFLOW
-
-**Intent**: Manage patients wanting earlier appointments
-
-**Steps**:
-1. **Add appointment to ASAP list**:
-   - UpdateAppointment(AptNum, Priority="ASAP", AptStatus can be "Scheduled", "Planned", or "UnschedList")
-   
-2. **When opening becomes available**:
-   - Get ASAP list: Query appointments with Priority="ASAP" and AptStatus
-   - Contact appropriate patients
-   
-3. **If patient accepts earlier time**:
-   - Reschedule appointment using Reschedule Appointment workflow
-   
-4. **Remove from ASAP when scheduled or no longer interested**:
-   - UpdateAppointment(AptNum, Priority=null or remove ASAP designation)
-
-**Conditions**:
-- Can mark any appointment status as ASAP (Scheduled, Planned, UnschedList)
-- When cancellation occurs, query ASAP list to fill opening
-- Remove ASAP designation when patient is satisfied with time
-
-# COMMON VALIDATIONS
-
-**Before Booking**:
-- Verify PatNum exists
-- **🚨 CRITICAL**: Verify the exact slot is FREE by calling GetAppointments for the specific date before CreateAppointment
-- Check appointment doesn't conflict with existing scheduled appointments
-- If slot is occupied, find alternative times and suggest them to the user - DO NOT book over existing appointments!
-- Verify Op (operatory) is valid
-- Verify provider is scheduled for that time (if checking provider schedule)
-- Validate date format: YYYY-MM-DD HH:mm:ss
-- Dates MUST be today or future, never past
-
-**Before Reschedule**:
-- Verify appointment exists and get AptNum, CURRENT AptDateTime, and ProvNum
-- **Key principle**: Calculate new date relative to CURRENT APPOINTMENT DATE based on user's natural language request
-- **Critical validation**: New date must be DIFFERENT from current appointment date (unless user explicitly wants "later today")
-- Example: Current appointment November 3rd, user says "next week" → November 10th (not November 3rd!)
-- Example: Current appointment November 3rd, user says "next month" → December 3rd (not November 3rd!)
-- **🚨 CRITICAL**: Verify the exact new slot is FREE by calling GetAppointments for the specific new date before UpdateAppointment
-- Check new time doesn't conflict with other appointments (excluding the current appointment being rescheduled)
-- If new slot is occupied, find alternative times and suggest them to the user - DO NOT reschedule to an occupied slot!
-- Verify new Op is valid
-- If broken appointment, remember to update status to "Scheduled" with datetime and op
-
-**Before Cancel**:
-- Verify appointment exists and is Scheduled status (or update first)
-- Determine correct breakType based on notice period
-- Check if recall appointment and unscheduled list restrictions
-- Ensure office has D9986 (missed) and D9987 (cancelled) procedure codes if using breakType
-
-# DATE RULES (TODAY IS ${todayFormatted.toUpperCase()})
-- TODAY: ${todayISO}
-- TOMORROW: ${tomorrowISO}
-- Format for dates: YYYY-MM-DD (e.g., "${todayISO}")
-- Format for appointment times: YYYY-MM-DD HH:mm:ss (e.g., "${todayISO} 09:00:00")
-- **CRITICAL**: Dates MUST be ${todayISO} or later - NEVER use past dates
-- Year: ${currentYear}
-- Valid date range: ${todayISO} to ${currentYear}-12-31 or later
-
-# RELATIVE DATE UNDERSTANDING (FOR RESCHEDULING)
-
-**Principle**: Use your natural language understanding to interpret relative date terms. Calculate dates relative to the CURRENT APPOINTMENT DATE, not today.
-
-**Critical Rule**: When user requests a different time period ("next week", "next month", "in two weeks", etc.), the new date MUST be different from the current appointment date.
-
-**Examples of correct interpretation**:
-- Current appointment: November 3rd, user says "next week" → November 10th (7 days later)
-- Current appointment: November 3rd, user says "next month" → December 3rd (~30 days later)
-- Current appointment: November 3rd (Monday), user says "next Monday" → November 10th (following Monday, not the same day)
-- Current appointment: November 3rd, user says "in two weeks" → November 17th (14 days later)
-- Current appointment: November 3rd, user says "later today" → November 3rd, different time (only exception for same date)
-
-**Common error to avoid**: Keeping the same date when user explicitly requests a different time period (e.g., rescheduling November 3rd to November 3rd when user says "next week")
-
-# AVAILABILITY CHECKING - PRODUCTION METHOD
-
-**🚨 CRITICAL**: ONLY use GetAppointments method. DO NOT use GetAvailableSlots or GetAppointmentSlots - these endpoints are NOT SUPPORTED and will return errors!
-
-**⚡ EFFICIENCY RULE**: When user specifies a SPECIFIC DATE/TIME, only check that ONE date - do NOT search date ranges unnecessarily!
-
-**DATE FORMAT RULE**: When calling GetAppointments, date parameters MUST be in "YYYY-MM-DD" format (date only, no time!)
-- ✅ CORRECT: GetAppointments(DateStart="2025-11-10", DateEnd="2025-11-17")
-- ❌ WRONG: GetAppointments(DateStart="2025-11-10T08:00:00", DateEnd="2025-11-17T17:00:00") - NO timestamps!
-
-**OPTIONAL QUICK REFERENCE**: Check pre-fetched occupiedSlots in OFFICE CONTEXT section above for a quick hint
-- ⚠️ **WARNING**: Pre-fetched slots might be STALE (booked during conversation)
-- ⚠️ **WARNING**: Pre-fetched slots only cover next 7 days from conversation start
-- ✅ **Use it for quick estimation** - but ALWAYS verify with real-time data!
-
-**STEP 1**: Call GetAppointments(DateStart="YYYY-MM-DD", DateEnd="YYYY-MM-DD") for the specific date range (REAL-TIME data)
-
-**STEP 2**: Interpret the response:
-- **IF response is EMPTY ARRAY []**: This means NO appointments exist in that date range!
-  - **ALL slots are FREE for all providers!**
-  - **YOU MUST suggest specific available times**, for example:
-    * "I have Monday, November 8th at 9:00 AM available"
-    * "Tuesday, November 9th at 10:00 AM is open"
-    * "Wednesday, November 10th at 2:00 PM works"
-  - **DO NOT say "no appointments available" when the array is empty - that means everything is open!**
-  - Suggest 3-5 specific times across different days
-
-- **IF response has appointments**: Extract occupied hours from each appointment's AptDateTime:
-  * Example: "2025-11-05 09:00:00" → occupied hour is 9 (9am)
-  * Example: "2025-11-05 14:30:00" → occupied hour is 14 (2pm)
-  * Build list of occupied hours: [9, 10, 14, 15] (example)
-
-**STEP 3**: Find free slots:
-- Search business hours (8-17 = 8am to 4pm typically) for FREE hours:
-  - Check 8 (8am) → is 8 in occupied list? → No? → Available! Suggest "8:00 AM"
-  - Check 9 (9am) → is 9 in occupied list? → Yes → Skip
-  - Check 10 (10am) → is 10 in occupied list? → Yes → Skip
-  - Check 11 (11am) → is 11 in occupied list? → No? → Available! Suggest "11:00 AM"
-  - Continue until you find 3-5 free slots across different days
-- Format suggested times: "YYYY-MM-DD HH:00:00" (e.g., "2025-11-08 09:00:00")
-- **Always suggest multiple options**: "I have Monday at 9 AM, Tuesday at 10 AM, or Wednesday at 2 PM available"
-
-**STEP 4**: Present available times to user:
-- Say: "I have [date] at [time], [date] at [time], and [date] at [time] available"
-- Give user 2-3 specific options with dates and times
-- **DO NOT just say "checking availability" and return empty - always suggest concrete times!**
-
-**CRITICAL RULES**:
-1. **Empty array [] = ALL slots free** - suggest multiple times!
-2. **Always suggest 2-3 specific available times** - never return without suggestions
-3. **Format**: Use natural language like "Monday, November 8th at 9:00 AM"
-4. **If user asks "check availability"**: Return specific available times, not just confirmation
-
-**NOTE**: GetAppointmentSlots endpoint returns 400 error ("appointments GET slots is not a valid method")
-- Always use GetAppointments + calculate gaps method
-- This method works reliably with all OpenDental databases
-
-**VALIDATION**: 
-1. **Always verify availability with GetAppointments before booking** - prevents double-booking
-2. **Pre-fetched occupiedSlots is a HINT only** - use it for quick conflict checks, but always call GetAppointments for the specific date
-3. **Cross-reference both**: Pre-fetched slots (fast, might be stale) + GetAppointments (real-time, accurate)
-
-# RESPONSE FORMAT
-- Natural, conversational tone for voice interaction
-- Be concise and clear
-- Include specific details (names, dates, times, **PROVIDER NAMES**)
-- **🚨 CRITICAL**: ALWAYS include provider name in booking/reschedule/recall confirmations
-- No bullet points or lists in your response
-- Don't mention technical details or API calls
-- **Provider name is MANDATORY** - patients need to know which doctor they're seeing!
-
-Remember: Be helpful, accurate, persistent, and always speak naturally as if talking to someone in person.`;
+  // Combine date info and office context
+  // Both are dynamic, so they go in the instructions field
+  // The static system prompt (workflows, rules, catalog) goes in input array
+  return (dateInfo + '\n\n' + contextSection.trim()).trim();
 }
 
 // META-TOOL APPROACH: Single tool that can call ANY of the 49 priority functions
@@ -658,7 +477,6 @@ export const orchestratorTools = [
 ];
 
 // Log the approach
-console.log(`[Orchestrator] Using META-TOOL approach with PRIORITY function catalog (49 functions)`);
 
 /**
  * Make API call to OpenDental worker route
@@ -679,15 +497,25 @@ async function callOpenDentalAPI(
       }),
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'API call failed');
+    const responseData = await response.json();
+    
+    // Check if response contains an error (even if status is 200)
+    if (!response.ok || responseData.error === true) {
+      const errorMessage = responseData.message || responseData.error || 'API call failed';
+      const conflictDetails = responseData.conflictDetails;
+      const error = new Error(errorMessage) as any;
+      error.conflictDetails = conflictDetails;
+      error.errorType = responseData.errorType; // Preserve error type (e.g., 'opendental_connection')
+      throw error;
     }
 
-    return await response.json();
+    return responseData;
   } catch (error: any) {
-    console.error(`[OpenDental API] ${functionName} failed:`, error);
-    throw error;
+    // Preserve error type if it exists
+    if (error.errorType) {
+      throw error;
+    }
+    throw new Error(`OpenDental API call failed: ${error.message}`);
   }
 }
 
@@ -695,13 +523,6 @@ async function callOpenDentalAPI(
  * Fetch response from OpenAI Responses API
  */
 async function fetchResponsesMessage(body: any) {
-  console.log('[fetchResponsesMessage] Request:', {
-    model: body.model,
-    toolsCount: body.tools?.length || 0,
-    inputCount: body.input?.length || 0,
-    instructionsLength: body.instructions?.length || 0
-  });
-  
   const response = await fetch('/api/responses', {
     method: 'POST',
     headers: {
@@ -711,12 +532,85 @@ async function fetchResponsesMessage(body: any) {
   });
 
   if (!response.ok) {
-    const errorText = await response.text();
-    console.error('[fetchResponsesMessage] Error:', response.status, errorText);
-    throw new Error(`Responses API error: ${response.statusText}`);
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+    console.error('[fetchResponsesMessage] Error:', response.status, errorData);
+    
+    // Preserve errorType if present
+    const error = new Error(errorData.details || errorData.error || `Responses API error: ${response.statusText}`);
+    (error as any).errorType = errorData.errorType;
+    throw error;
   }
 
   return await response.json();
+}
+
+// REACT-STYLE PRE-VALIDATION
+interface PreValidationResult {
+  valid: boolean;
+  have: Record<string, any>;
+  missing: string[];
+  errorMessage: string;
+}
+
+function preValidateFunctionCall(
+  functionName: string,
+  parameters: Record<string, any> | undefined,
+  inputHistory: any[]
+): PreValidationResult {
+  const params = parameters || {};
+  const have: Record<string, any> = {};
+  const missing: string[] = [];
+  
+  let patientFromHistory: any = null;
+  for (const item of inputHistory) {
+    if (item.type === 'function_call_output' && item.output) {
+      try {
+        const parsed = JSON.parse(item.output || '{}');
+        const data = parsed.data || parsed.success?.data;
+        if (Array.isArray(data) && data.length > 0 && data[0]?.PatNum) {
+          patientFromHistory = data[0];
+        } else if (data?.PatNum) {
+          patientFromHistory = data;
+        }
+      } catch { /* Continue */ }
+    }
+  }
+  
+  switch (functionName) {
+    case 'CreatePatient':
+      if (params.FName) have.FName = params.FName; else missing.push('first name');
+      if (params.LName) have.LName = params.LName; else missing.push('last name');
+      if (params.Birthdate) have.Birthdate = params.Birthdate; else missing.push('date of birth');
+      if (params.WirelessPhone) have.WirelessPhone = params.WirelessPhone; else missing.push('phone number');
+      if (missing.length > 0) {
+        return { valid: false, have, missing, errorMessage: `STOP! I need to ask the user for their ${missing.join(', ')}.` };
+      }
+      break;
+    case 'CreateAppointment':
+      if (params.PatNum || patientFromHistory?.PatNum) have.PatNum = params.PatNum || patientFromHistory?.PatNum; 
+      else missing.push('PatNum (need patient first)');
+      if (params.AptDateTime) have.AptDateTime = params.AptDateTime; else missing.push('AptDateTime');
+      if (missing.length > 0) {
+        return { valid: false, have, missing, errorMessage: missing.includes('PatNum') 
+          ? 'STOP! Need to find or create patient first.' : 'STOP! Need time slot selection.' };
+      }
+      break;
+    case 'GetMultiplePatients':
+      if (params.LName) have.LName = params.LName;
+      if (params.FName) have.FName = params.FName;
+      if (params.Phone) have.Phone = params.Phone;
+      if (!params.LName && !params.FName && !params.Phone) {
+        return { valid: false, have, missing: ['name or phone'], errorMessage: 'STOP! Need name or phone to look up patient.' };
+      }
+      break;
+    case 'UpdateAppointment':
+      if (params.AptNum) have.AptNum = params.AptNum; else missing.push('AptNum');
+      if (missing.length > 0) {
+        return { valid: false, have, missing, errorMessage: 'STOP! Need to find appointment first.' };
+      }
+      break;
+  }
+  return { valid: true, have, missing: [], errorMessage: '' };
 }
 
 /**
@@ -733,7 +627,6 @@ async function handleResponseIterations(
 
   while (iterations < maxIterations) {
     iterations++;
-    console.log(`\n========== [Orchestrator] ITERATION ${iterations}/${maxIterations} ==========`);
 
     if (currentResponse?.error) {
       console.error('[Orchestrator] Response has error:', currentResponse.error);
@@ -776,17 +669,85 @@ async function handleResponseIterations(
       if (toolName === 'callOpenDentalAPI') {
         const { functionName, parameters } = args;
         
-        console.log(`\n========== [Orchestrator] CALLING API ==========`);
-        console.log(`Meta-Tool: callOpenDentalAPI`);
-        console.log(`Function: ${functionName}`);
-        console.log(`Parameters:`, JSON.stringify(parameters, null, 2));
+        // ══════════════════════════════════════════════════════════════════
+        // REACT-STYLE PRE-VALIDATION: Think before calling!
+        // ══════════════════════════════════════════════════════════════════
+        const preValidation = preValidateFunctionCall(functionName, parameters, body.input);
+        if (!preValidation.valid) {
+          console.log(`\n[Orchestrator] 🤔 REACT PRE-CHECK for ${functionName}:`);
+          console.log(`  Have: ${JSON.stringify(preValidation.have)}`);
+          console.log(`  Missing: ${preValidation.missing.join(', ')}`);
+          console.log(`  Action: ASK USER for missing info\n`);
+          
+          // Return error immediately without calling API
+          body.input.push(
+            {
+              type: 'function_call',
+              call_id: toolCall.call_id,
+              name: toolCall.name,
+              arguments: toolCall.arguments,
+            },
+            {
+              type: 'function_call_output',
+              call_id: toolCall.call_id,
+              output: JSON.stringify({
+                error: true,
+                reactThinking: `I checked what I have: ${JSON.stringify(preValidation.have)}. I'm missing: ${preValidation.missing.join(', ')}`,
+                message: preValidation.errorMessage,
+                action: 'MUST_ASK_USER',
+                missing: preValidation.missing,
+                have: preValidation.have,
+                doNotCallOtherFunctions: true,
+                instruction: `You MUST ask the user for: ${preValidation.missing.join(', ')}. Do NOT call any other functions until the user provides this information.`
+              }),
+            },
+          );
+          continue; // Skip to next tool call
+        }
+        
+        // Helpful validation: Try to auto-inject PatNum from history if missing (non-breaking)
+        if ((functionName === 'CreateAppointment' || functionName === 'UpdateAppointment')) {
+          // Check if we have GetMultiplePatients result in history that we can use
+          const getMultiplePatientsResult = body.input.find((item: any) => 
+            item.type === 'function_call_output' && 
+            item.output && 
+            (() => {
+              try {
+                const parsed = JSON.parse(item.output || '{}');
+                return parsed.data?.[0]?.PatNum || parsed.success?.data?.[0]?.PatNum;
+              } catch {
+                return false;
+              }
+            })()
+          );
+          
+          if (getMultiplePatientsResult) {
+            try {
+              const parsed = JSON.parse(getMultiplePatientsResult.output);
+              const patientData = parsed.data?.[0] || parsed.success?.data?.[0];
+              if (patientData?.PatNum) {
+                // Auto-inject PatNum if missing (helpful, non-breaking)
+                if (!parameters) {
+                  console.warn(`[Orchestrator] ⚠️ ${functionName} called without parameters, auto-injecting PatNum=${patientData.PatNum} from history`);
+                  args.parameters = { PatNum: patientData.PatNum };
+                } else if (!parameters.PatNum) {
+                  console.warn(`[Orchestrator] ⚠️ ${functionName} missing PatNum, auto-injecting PatNum=${patientData.PatNum} from history`);
+                  args.parameters = { ...parameters, PatNum: patientData.PatNum };
+                }
+              }
+            } catch {
+              // Silent fail - don't break the flow
+            }
+          }
+        }
+        
+        // Use args.parameters in case it was modified by validation
+        const finalParameters = args.parameters || parameters;
+        
 
         try {
           // Call OpenDental API via worker route
-          const result = await callOpenDentalAPI(functionName, parameters);
-          console.log(`\n[Orchestrator] ✅ ${functionName} SUCCESS:`);
-          console.log(JSON.stringify(result, null, 2));
-          console.log(`================================================\n`);
+          const result = await callOpenDentalAPI(functionName, finalParameters);
 
           // Add function call and result to the request body
           body.input.push(
@@ -806,11 +767,20 @@ async function handleResponseIterations(
             },
           );
         } catch (error: any) {
-          console.error(`\n[Orchestrator] ❌ ${functionName} ERROR:`);
-          console.error(error.message || error);
-          console.error(`================================================\n`);
+          console.error(`\n[Orchestrator] ❌ ${functionName} ERROR:`, error.message);
 
-          // Add error output
+          // Enhance error message to clearly tell agent what to do
+          let errorMessage = error.message || 'Unknown error';
+          let nextAction = 'ASK_USER_FOR_MISSING_INFO';
+          
+          // Check if this is a validation error with missing params
+          if (error.validationError || errorMessage.includes('STOP!') || errorMessage.includes('missing required')) {
+            nextAction = 'MUST_ASK_USER_BEFORE_PROCEEDING';
+          } else if (functionName === 'CreatePatient' && errorMessage.includes('Phone number')) {
+            errorMessage = `STOP! Phone number validation failed. ASK THE USER: "Could you please provide your full 10-digit phone number including area code?"`;
+          }
+
+          // Add error output with clear instructions
           body.input.push(
             {
               type: 'function_call',
@@ -823,22 +793,19 @@ async function handleResponseIterations(
               call_id: toolCall.call_id,
               output: JSON.stringify({
                 error: true,
-                message: error.message || 'Unknown error'
+                message: errorMessage,
+                action: nextAction,
+                doNotCallOtherFunctions: true,
+                instruction: 'You MUST speak to the user and ask for the missing information. Do NOT call any other API functions until the user provides the required data.'
               }),
             },
           );
         }
       } else {
         // Handle any other direct tool calls (legacy support)
-        console.log(`\n========== [Orchestrator] CALLING TOOL ==========`);
-        console.log(`Tool: ${toolName}`);
-        console.log(`Arguments:`, JSON.stringify(args, null, 2));
         
         try {
           const result = await callOpenDentalAPI(toolName, args);
-          console.log(`\n[Orchestrator] ✅ ${toolName} SUCCESS:`);
-          console.log(JSON.stringify(result, null, 2));
-          console.log(`================================================\n`);
 
           body.input.push(
             {
@@ -861,6 +828,15 @@ async function handleResponseIterations(
           console.error(error.message || error);
           console.error(`================================================\n`);
 
+          // Preserve errorType for propagation
+          const errorOutput: any = {
+            error: true,
+            message: error.message || 'Unknown error'
+          };
+          if (error.errorType) {
+            errorOutput.errorType = error.errorType;
+          }
+
           body.input.push(
             {
               type: 'function_call',
@@ -871,18 +847,19 @@ async function handleResponseIterations(
             {
               type: 'function_call_output',
               call_id: toolCall.call_id,
-              output: JSON.stringify({
-                error: true,
-                message: error.message || 'Unknown error'
-              }),
+              output: JSON.stringify(errorOutput),
             },
           );
+          
+          // Re-throw with errorType preserved so it can be caught by greeting agent
+          if (error.errorType) {
+            throw error;
+          }
         }
       }
     }
 
     // Make the follow-up request including the tool outputs
-    console.log(`[Orchestrator] Making follow-up request with ${body.input.length} input items...`);
     currentResponse = await fetchResponsesMessage(body);
   }
 
@@ -891,7 +868,198 @@ async function handleResponseIterations(
 }
 
 /**
- * Orchestrator agent tool
+ * Core orchestrator function (can be called directly or via tool)
+ */
+export async function executeOrchestrator(
+  relevantContextFromLastUserMessage: string,
+  conversationHistory: any[] = [],
+  officeContext?: OfficeContext
+): Promise<string> {
+
+  try {
+    // Use provided office context or try to extract from history
+    let finalOfficeContext: OfficeContext | undefined = officeContext;
+    
+    if (!finalOfficeContext && conversationHistory) {
+      // Try multiple search strategies to find office context in history
+      for (const item of conversationHistory) {
+        // Strategy 1: function_call with output property
+        if (item.type === 'function_call' && 
+            item.name === 'get_office_context' && 
+            item.output) {
+          try {
+            const parsed = typeof item.output === 'string' 
+              ? JSON.parse(item.output) 
+              : item.output;
+            finalOfficeContext = parsed;
+            break;
+          } catch {
+            // Silent fail, try next strategy
+          }
+        }
+        
+        // Strategy 2: Direct function_call_output item
+        if (item.type === 'function_call_output' && 
+            item.name === 'get_office_context' && 
+            item.output) {
+          try {
+            const parsed = typeof item.output === 'string' 
+              ? JSON.parse(item.output) 
+              : item.output;
+            finalOfficeContext = parsed;
+            break;
+          } catch {
+            // Silent fail, try next strategy
+          }
+        }
+        
+        // Strategy 3: Function call within message content array
+        if (item.type === 'message' && Array.isArray(item.content)) {
+          for (const contentItem of item.content) {
+            if (contentItem.type === 'function_call_output' && 
+                contentItem.name === 'get_office_context' && 
+                contentItem.output) {
+              try {
+                const parsed = typeof contentItem.output === 'string' 
+                  ? JSON.parse(contentItem.output) 
+                  : contentItem.output;
+                finalOfficeContext = parsed;
+                break;
+              } catch {
+                // Silent fail
+              }
+            }
+          }
+          if (finalOfficeContext) break;
+        }
+        
+        // Strategy 4: Check if item has a result property
+        if (item.type === 'function_call' && 
+            item.name === 'get_office_context' && 
+            item.result) {
+          try {
+            const parsed = typeof item.result === 'string' 
+              ? JSON.parse(item.result) 
+              : item.result;
+            finalOfficeContext = parsed;
+            break;
+          } catch {
+            // Silent fail
+          }
+        }
+      }
+    }
+    
+    // Get user message
+    const userMessage = relevantContextFromLastUserMessage || 'Help needed';
+    
+    // Extract messages AND function_call/function_call_output pairs from conversation history
+    // NOTE: Responses API accepts function_call/function_call_output PAIRS, but not standalone function_call_output
+    // This allows the LLM to see previous GetMultiplePatients results and extract PatNum
+    // Office context is extracted separately above and passed via instructions
+    const extractedHistory: any[] = [];
+    
+    // Track pending function calls to pair with their outputs
+    const pendingFunctionCalls = new Map<string, any>();
+    
+    // Extract messages and function call pairs from history
+    for (let i = 0; i < conversationHistory.length; i++) {
+      const item = conversationHistory[i];
+      
+      if (item.type === 'message' && item.role) {
+        // Extract text content from message
+        let textContent = '';
+        if (typeof item.content === 'string') {
+          textContent = item.content;
+        } else if (Array.isArray(item.content)) {
+          textContent = item.content
+            .filter((c: any) => c.type === 'input_text' || c.type === 'output_text' || !c.type)
+            .map((c: any) => c.text || c.content || c)
+            .join(' ');
+        }
+        
+        if (textContent.trim()) {
+          extractedHistory.push({
+            type: 'message',
+            role: item.role,
+            content: textContent.trim()
+          });
+        }
+      } else if (item.type === 'function_call') {
+        // Store function call to pair with its output
+        pendingFunctionCalls.set(item.call_id, item);
+      } else if (item.type === 'function_call_output') {
+        // Check if we have a matching function_call
+        const matchingCall = pendingFunctionCalls.get(item.call_id);
+        if (matchingCall) {
+          // Include function_call + function_call_output pairs (Responses API accepts these)
+          // This allows the LLM to see previous GetMultiplePatients results and extract PatNum
+          extractedHistory.push(
+            {
+              type: 'function_call',
+              call_id: matchingCall.call_id,
+              name: matchingCall.name,
+              arguments: matchingCall.arguments,
+            },
+            {
+              type: 'function_call_output',
+              call_id: item.call_id,
+              output: item.output,
+            }
+          );
+          pendingFunctionCalls.delete(item.call_id); // Remove from pending
+        }
+        // Skip standalone function_call_output items (without preceding function_call)
+      }
+    }
+  
+  // Build request body for Responses API
+  // Strategy: Separate static (cached) from dynamic (per-call)
+  // - Static instructions: workflows, rules, function catalog (IDENTICAL across calls → auto-cached by OpenAI)
+  // - Dynamic instructions: dates and office context (changes per call) → goes in input array as system message
+  const staticSystemPrompt = getStaticSystemPrompt();
+  const dynamicInstructions = generateOrchestratorInstructions(finalOfficeContext);
+  
+  const body: any = {
+    model: 'gpt-4o',
+    instructions: staticSystemPrompt.text, // Static only here (gets cached)
+    tools: orchestratorTools,
+    input: [
+      // Dynamic context as first message
+      {
+        type: 'message',
+        role: 'system',
+        content: dynamicInstructions || ''
+      },
+      ...extractedHistory, // Include full conversation history
+      {
+        type: 'message',
+        role: 'user',
+        content: userMessage
+      }
+    ]
+  };
+
+  // Make initial request
+  const response = await fetchResponsesMessage(body);
+  
+  // Handle tool calls iteratively
+  const finalResponse = await handleResponseIterations(body, response);
+  
+  
+  // Return plain string - Lexi will read this verbatim
+  return finalResponse;
+
+  } catch (error: any) {
+    console.error('[executeOrchestrator] Error:', error);
+    
+    // Return plain string for errors too
+    return `I encountered an error while processing your request: ${error.message}`;
+  }
+}
+
+/**
+ * Orchestrator agent tool (wraps executeOrchestrator for Realtime SDK)
  */
 export const getNextResponseFromSupervisor = tool({
   name: 'getNextResponseFromSupervisor',
@@ -912,104 +1080,10 @@ export const getNextResponseFromSupervisor = tool({
       relevantContextFromLastUserMessage: string;
     };
     
-    console.log('\n🔵 ========================================');
-    console.log('🔵 [ORCHESTRATOR] INVOKED');
-    console.log('🔵 User Message:', relevantContextFromLastUserMessage);
-    console.log('🔵 ========================================\n');
-
-    try {
-      // Extract office context from conversation history if available
-      let officeContext: OfficeContext | undefined;
-      const details = _details as any; // Type assertion for context access
-      if (details?.context?.history) {
-        for (const message of details.context.history) {
-          if (message.type === 'function_call_output' && 
-              message.name === 'get_office_context' && 
-              message.output) {
-            try {
-              officeContext = JSON.parse(message.output as string);
-              console.log('[ORCHESTRATOR] ✅ Found office context:', {
-                providers: officeContext?.providers?.length || 0,
-                operatories: officeContext?.operatories?.length || 0,
-                occupiedSlots: officeContext?.occupiedSlots?.length || 0
-              });
-              break;
-            } catch (e) {
-              console.error('[ORCHESTRATOR] Failed to parse office context:', e);
-            }
-          }
-        }
-      }
-      
-      if (!officeContext) {
-        console.log('[ORCHESTRATOR] ⚠️ No office context found - will need additional API calls');
-      }
-      
-      // Get user message and conversation history
-      const userMessage = relevantContextFromLastUserMessage || 'Help needed';
-      
-      // Extract conversation history from context
-      const history = details?.context?.history || [];
-      const conversationHistory: any[] = [];
-      
-      // Extract messages from history (user and assistant messages)
-      for (const item of history) {
-        if (item.type === 'message' && item.role) {
-          // Extract text content from message
-          let textContent = '';
-          if (typeof item.content === 'string') {
-            textContent = item.content;
-          } else if (Array.isArray(item.content)) {
-            textContent = item.content
-              .filter((c: any) => c.type === 'input_text' || c.type === 'output_text' || !c.type)
-              .map((c: any) => c.text || c.content || c)
-              .join(' ');
-          }
-          
-          if (textContent.trim()) {
-            conversationHistory.push({
-              type: 'message',
-              role: item.role,
-              content: textContent.trim()
-            });
-          }
-        }
-      }
-      
-      // Build request body for Responses API with office context and conversation history
-      const body: any = {
-        model: 'gpt-4o-mini',
-        instructions: generateOrchestratorInstructions(officeContext), // Pass office context
-        tools: orchestratorTools,
-        input: [
-          ...conversationHistory, // Include full conversation history
-          {
-            type: 'message',
-            role: 'user',
-            content: userMessage
-          }
-        ]
-      };
-
-      // Make initial request
-      const response = await fetchResponsesMessage(body);
-      
-      // Handle tool calls iteratively
-      const finalResponse = await handleResponseIterations(body, response);
-      
-      console.log('\n=================================================');
-      console.log('[Orchestrator] FINAL RESPONSE TO USER:');
-      console.log(finalResponse);
-      console.log('=================================================\n');
-      
-      // Return plain string - Lexi will read this verbatim
-      return finalResponse;
-
-    } catch (error: any) {
-      console.error('[getNextResponseFromSupervisor] Error:', error);
-      
-      // Return plain string for errors too
-      return `I encountered an error while processing your request: ${error.message}`;
-    }
+    const details = _details as any;
+    const history = details?.context?.history || [];
+    const officeContext = details?.context?.officeContext;
+    
+    return await executeOrchestrator(relevantContextFromLastUserMessage, history, officeContext);
   },
 });

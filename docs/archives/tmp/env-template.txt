@@ -1,0 +1,55 @@
+# Copy this file to .env.local in the root directory
+# Then replace the placeholder values with your actual credentials
+
+# ============================================================
+# SUPABASE CONFIGURATION
+# ============================================================
+# Get these from: https://supabase.com/dashboard/project/YOUR_PROJECT/settings/api
+
+# Project URL (found in Settings > API)
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+
+# Service Role Key (found in Settings > API > Project API keys > service_role)
+# ⚠️ IMPORTANT: Keep this secret! Never commit to git!
+SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.your-actual-key-here
+
+# Anon/Public Key (found in Settings > API > Project API keys > anon/public)
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.your-actual-key-here
+
+# ============================================================
+# OTHER API KEYS (if you have them)
+# ============================================================
+
+# OpenDental API Configuration
+OPENDENTAL_API_URL=your-opendental-url
+OPENDENTAL_API_KEY=your-opendental-key
+
+# Retell AI Configuration
+RETELL_API_KEY=your-retell-api-key
+
+# OpenAI API Key
+OPENAI_API_KEY=sk-your-openai-key
+
+# Anthropic API Key (for Claude/Sonnet)
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-key
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

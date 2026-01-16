@@ -39,18 +39,16 @@ const PRIORITY_FUNCTIONS = [
   'GetPatient',               // Get specific patient by ID
   'CreatePatient',            // Register new patient
   'UpdatePatient',            // Update patient info
-  'DeletePatient',            // Remove patient
+  // 'DeletePatient',            // ❌ REMOVED - Function does not exist in OpenDental API
   'GetPatientBalances',       // Check patient balance
   'GetPatientAccountInfo',    // Get detailed account info
   'GetPatientProcedures',     // Get patient's procedures
   'GetPatientFamily',         // Get family members
   
-  // === APPOINTMENTS (11 functions) ===
+  // === APPOINTMENTS (12 functions) ===
   'GetAppointments',          // List appointments
   'GetAppointmentById',       // Get specific appointment
-  // 'GetAppointmentSlots',  // ❌ REMOVED - Endpoint not supported: "appointments GET slots is not a valid method"
-  // 'GetAvailableSlots',     // ❌ REMOVED - Always returns [] in test DBs
-  // Use GetAppointments with dateStart/dateEnd to get occupied slots, then calculate free slots
+  'GetAvailableSlots',       // Get available appointment slots (requires ProvNum and OpNum)
   'CreateAppointment',        // Schedule appointment
   'UpdateAppointment',        // Modify appointment
   'BreakAppointment',         // Cancel appointment (keeps record)

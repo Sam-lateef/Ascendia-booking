@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "AGENT13 - Coming Soon",
+  title: "Ascendia AI - Coming Soon",
   description: "Next-generation AI agent platform",
 };
 

@@ -453,7 +453,7 @@ void main() {
         <div
           className="relative z-10 flex flex-col h-full"
         >
-          {/* AGENT13 - Fixed position, moved more to the right */}
+          {/* Ascendia AI - Fixed position, moved more to the right */}
           <div
             style={{
               position: 'absolute',
@@ -468,14 +468,14 @@ void main() {
               whiteSpace: 'nowrap'
             }}
           >
-            AGENT13
+            Ascendia AI
           </div>
 
-          {/* Typed text with underscore - appears to the right of AGENT13 */}
+          {/* Typed text with underscore - appears to the right of Ascendia AI */}
           <div
             style={{
               position: 'absolute',
-              left: 'calc(15% + 280px)', // Position after AGENT13 with proper spacing
+              left: 'calc(15% + 280px)', // Position after Ascendia AI with proper spacing
               top: '40%',
               transform: 'translateY(-50%)',
               fontSize: '3rem',
@@ -497,7 +497,7 @@ void main() {
             </span>
           </div>
 
-          {/* Tagline - positioned below AGENT13, on the right side */}
+          {/* Tagline - positioned below Ascendia AI, on the right side */}
           <div
             className="absolute"
             style={{

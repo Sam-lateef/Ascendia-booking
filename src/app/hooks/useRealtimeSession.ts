@@ -50,11 +50,17 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
         historyHandlers.handleTranscriptionCompleted(event);
         break;
       }
+      case "conversation.item.input_audio_transcription.delta": {
+        // Handle input audio transcription deltas (user speech)
+        historyHandlers.handleTranscriptionDelta(event);
+        break;
+      }
       case "response.audio_transcript.done": {
         historyHandlers.handleTranscriptionCompleted(event);
         break;
       }
       case "response.audio_transcript.delta": {
+        // Handle response audio transcription deltas (assistant speech)
         historyHandlers.handleTranscriptionDelta(event);
         break;
       }
@@ -128,6 +134,33 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
       const codecParam = codecParamRef.current;
       const audioFormat = audioFormatForCodec(codecParam);
 
+      // Detect if using Standard mode (cost-optimized two-agent)
+      const isStandardMode = rootAgent.name === 'lexiChat';
+      const modelToUse = isStandardMode 
+        ? 'gpt-4o-mini-realtime-preview-2024-12-17' // Standard: cost-optimized
+        : 'gpt-4o-realtime-preview-2025-06-03';      // Premium: full featured
+
+      // Load database instructions for Standard mode
+      if (isStandardMode) {
+        console.log('[RealtimeSession] Using Standard mode (cost-optimized)');
+        
+        try {
+          // Dynamic import to avoid issues with server-side rendering
+          const { loadInstructionsFromDB } = await import('../agentConfigs/embeddedBooking/lexiStandardAgent');
+          const dbInstructions = await loadInstructionsFromDB();
+          
+          if (dbInstructions.useManual && dbInstructions.receptionist) {
+            // Update the root agent's instructions with DB version
+            rootAgent.instructions = dbInstructions.receptionist;
+            console.log('[RealtimeSession] Applied database instructions');
+          }
+        } catch (error) {
+          console.warn('[RealtimeSession] Could not load DB instructions:', error);
+        }
+      } else {
+        console.log('[RealtimeSession] Using Premium mode');
+      }
+
       sessionRef.current = new RealtimeSession(rootAgent, {
         transport: new OpenAIRealtimeWebRTC({
           audioElement,
@@ -137,12 +170,13 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
             return pc;
           },
         }),
-        model: 'gpt-4o-realtime-preview-2025-06-03',
+        model: modelToUse,
         config: {
           inputAudioFormat: audioFormat,
           outputAudioFormat: audioFormat,
           inputAudioTranscription: {
             model: 'gpt-4o-mini-transcribe',
+            language: 'en', // Explicitly set to English to prevent language mixing and auto-detection issues
           },
         },
         outputGuardrails: outputGuardrails ?? [],

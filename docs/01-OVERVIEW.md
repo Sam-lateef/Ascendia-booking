@@ -99,7 +99,7 @@ This is an advanced voice agent application built on OpenAI's Realtime API and A
 ## Project Structure
 
 ```
-Agent0RT/
+AscendiaAIRT/
 ├── src/app/
 │   ├── App.tsx                    # Main orchestrator
 │   ├── page.tsx                   # Next.js page wrapper

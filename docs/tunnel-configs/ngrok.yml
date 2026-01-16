@@ -1,0 +1,19 @@
+# ngrok configuration for Retell Integration
+# This allows running both tunnels (Next.js and WebSocket) together
+
+version: "2"
+
+# Your authtoken (set this after getting it from ngrok dashboard)
+# authtoken: YOUR_AUTH_TOKEN_HERE
+
+tunnels:
+  nextjs:
+    addr: 3000
+    proto: http
+    domain: ascendia-api.ngrok.io
+    
+  websocket:
+    addr: 8080
+    proto: http
+    domain: ascendia-ws.ngrok.io
+

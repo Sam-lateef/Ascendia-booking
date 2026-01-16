@@ -1,0 +1,23 @@
+# Cloudflare Tunnel Configuration Template
+# Save this as: C:\Users\[USERNAME]\.cloudflared\[TUNNEL-ID].yml
+# Replace [TUNNEL-ID] with your actual tunnel ID
+
+tunnel: [TUNNEL-ID]
+credentials-file: C:\Users\[USERNAME]\.cloudflared\[TUNNEL-ID].json
+
+# Ingress rules - this routes your domain to the agent-ui page
+ingress:
+  # Route agent.asandiagroup-testing.com/agent-ui* to localhost with query param
+  - hostname: agent.asandiagroup-testing.com
+    path: /agent-ui*
+    service: http://localhost:3000
+    originRequest:
+      # Add query parameter to all requests
+      httpHostHeader: localhost:3000
+      # Optional: Add custom headers
+      originServerName: localhost
+  # Block everything else (optional)
+  - service: http_status:404
+
+# Optional: Enable metrics
+metrics: 0.0.0.0:8080

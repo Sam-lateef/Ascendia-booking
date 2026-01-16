@@ -18,6 +18,9 @@ export interface Provider {
   isAvailable: boolean;
   isHidden: boolean;
   color?: string;
+  hasSchedules?: boolean;
+  scheduleCount?: number;
+  schedules?: ProviderSchedule[];
 }
 
 export interface Operatory {
@@ -29,6 +32,19 @@ export interface Operatory {
   isHidden: boolean;
   provNum?: number;
   clinicNum?: number;
+  hasSchedules?: boolean;
+  scheduleCount?: number;
+}
+
+export interface ProviderSchedule {
+  scheduleNum: number;
+  schedDate: string;
+  startTime: string;
+  stopTime: string;
+  schedType: string;
+  provNum: number;
+  operatories?: string;
+  note?: string;
 }
 
 export interface OccupiedSlot {
@@ -50,6 +66,13 @@ export interface OfficeContext {
   defaults: typeof openDentalConfig.defaults;
   fetchedAt: string;
   expiresAt: string;
+  scheduleConfig?: {
+    totalSchedules: number;
+    providersWithSchedules: number;
+    operatoriesWithSchedules: number;
+    defaultProviderHasSchedule: boolean;
+    defaultOperatoryHasSchedule: boolean;
+  };
 }
 
 /**
@@ -60,8 +83,6 @@ export interface OfficeContext {
  */
 export async function fetchOfficeContext(): Promise<OfficeContext> {
   const config = openDentalConfig;
-  
-  console.log('[fetchOfficeContext] Starting parallel fetch...');
   const startTime = Date.now();
   
   // Calculate date range (today + lookAheadDays)
@@ -71,8 +92,6 @@ export async function fetchOfficeContext(): Promise<OfficeContext> {
   const endDate = new Date(today);
   endDate.setDate(endDate.getDate() + config.availability.lookAheadDays);
   const endDateStr = formatDate(endDate);
-  
-  console.log(`[fetchOfficeContext] Fetching appointments from ${todayStr} to ${endDateStr}`);
 
   try {
     // Fetch all 3 in parallel for maximum speed
@@ -115,11 +134,6 @@ export async function fetchOfficeContext(): Promise<OfficeContext> {
       appointmentsRes.json()
     ]);
 
-    console.log(`[fetchOfficeContext] Raw data received:`, {
-      providers: Array.isArray(providersData) ? providersData.length : 'error',
-      operatories: Array.isArray(operatoriesData) ? operatoriesData.length : 'error',
-      appointments: Array.isArray(appointmentsData) ? appointmentsData.length : 'error'
-    });
 
     // Format providers
     const providers: Provider[] = (Array.isArray(providersData) ? providersData : []).map((p: any) => ({
@@ -131,7 +145,10 @@ export async function fetchOfficeContext(): Promise<OfficeContext> {
       specialty: p.Specialty || 'General',
       isAvailable: !p.IsHidden && !p.IsSecondary,
       isHidden: p.IsHidden || false,
-      color: p.ProvColor
+      color: p.ProvColor,
+      hasSchedules: false,
+      scheduleCount: 0,
+      schedules: []
     }));
 
     // Format operatories  
@@ -143,7 +160,9 @@ export async function fetchOfficeContext(): Promise<OfficeContext> {
       isAvailable: !(o.IsHidden === 1 || o.IsHidden === true),
       isHidden: o.IsHidden === 1 || o.IsHidden === true,
       provNum: o.ProvDentist || o.ProvHygienist,
-      clinicNum: o.ClinicNum
+      clinicNum: o.ClinicNum,
+      hasSchedules: false,
+      scheduleCount: 0
     }));
 
     // Format occupied slots
@@ -161,26 +180,155 @@ export async function fetchOfficeContext(): Promise<OfficeContext> {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + config.dataFreshness.officeContextTTL);
     
-    const fetchTime = Date.now() - startTime;
-    console.log(`[fetchOfficeContext] ✅ Success in ${fetchTime}ms:`, {
-      providers: providers.length,
-      operatories: operatories.length,
-      occupiedSlots: occupiedSlots.length
-    });
+    // Fetch schedule configuration for providers and operatories
+    const scheduleStartTime = Date.now();
+    
+    try {
+      // Fetch schedules for all providers (check today and next 7 days)
+      // Use a wider date range to ensure we catch schedules even if they're a few days away
+      const scheduleStartDate = new Date(today);
+      scheduleStartDate.setDate(scheduleStartDate.getDate() - 1); // Start 1 day before today
+      const scheduleStartDateStr = formatDate(scheduleStartDate);
+      
+      const scheduleEndDate = new Date(today);
+      scheduleEndDate.setDate(scheduleEndDate.getDate() + 14); // Check next 14 days
+      const scheduleEndDateStr = formatDate(scheduleEndDate);
+      
+      // Fetch schedules for each provider in parallel (limit to first 10 to avoid too many calls)
+      const providersToCheck = providers.filter(p => p.isAvailable && !p.isHidden).slice(0, 10);
+      // If no providers pass the filter, check all providers anyway (maybe filter is too strict)
+      const providersToCheckFinal = providersToCheck.length > 0 ? providersToCheck : providers.slice(0, 10);
+      
+      const schedulePromises = providersToCheckFinal.map(async (provider) => {
+        try {
+          const requestParams = {
+            dateStart: scheduleStartDateStr,
+            dateEnd: scheduleEndDateStr,
+            ProvNum: provider.provNum,
+            SchedType: 'Provider'
+          };
+          
+          const scheduleRes = await fetch('/api/opendental', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              functionName: 'GetMultipleSchedules',
+              parameters: requestParams
+            })
+          });
+          
+          if (!scheduleRes.ok) {
+            await scheduleRes.json().catch(() => ({}));
+            return { provNum: provider.provNum, schedules: [] };
+          }
+          
+          const scheduleData = await scheduleRes.json();
+          
+          const schedules: ProviderSchedule[] = Array.isArray(scheduleData) ? scheduleData.map((s: any) => ({
+            scheduleNum: s.ScheduleNum,
+            schedDate: s.SchedDate,
+            startTime: s.StartTime,
+            stopTime: s.StopTime,
+            schedType: s.SchedType,
+            provNum: s.ProvNum,
+            operatories: s.operatories,
+            note: s.Note
+          })) : [];
+          
+          return { provNum: provider.provNum, schedules };
+        } catch (error) {
+          return { provNum: provider.provNum, schedules: [] };
+        }
+      });
+      
+      const scheduleResults = await Promise.all(schedulePromises);
+      
+      // Update providers with schedule info
+      scheduleResults.forEach(({ provNum, schedules }) => {
+        const provider = providers.find(p => p.provNum === provNum);
+        if (provider) {
+          provider.schedules = schedules;
+          provider.scheduleCount = schedules.length;
+          provider.hasSchedules = schedules.length > 0;
+        }
+      });
+      
+      // Check operatory schedules via GetScheduleOps
+      const operatoryPromises = operatories.filter(o => o.isAvailable && !o.isHidden).slice(0, 10).map(async (operatory) => {
+        try {
+          const scheduleOpsRes = await fetch('/api/opendental', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              functionName: 'GetScheduleOps',
+              parameters: {
+                OperatoryNum: operatory.opNum
+              }
+            })
+          });
+          
+          const scheduleOpsData = await scheduleOpsRes.json();
+          const scheduleOps = Array.isArray(scheduleOpsData) ? scheduleOpsData : [];
+          
+          return { opNum: operatory.opNum, scheduleCount: scheduleOps.length };
+        } catch (error) {
+          return { opNum: operatory.opNum, scheduleCount: 0 };
+        }
+      });
+      
+      const operatoryScheduleResults = await Promise.all(operatoryPromises);
+      
+      // Update operatories with schedule info
+      operatoryScheduleResults.forEach(({ opNum, scheduleCount }) => {
+        const operatory = operatories.find(o => o.opNum === opNum);
+        if (operatory) {
+          operatory.scheduleCount = scheduleCount;
+          operatory.hasSchedules = scheduleCount > 0;
+        }
+      });
+      
+      // Calculate schedule configuration summary
+      const providersWithSchedules = providers.filter(p => p.hasSchedules).length;
+      const operatoriesWithSchedules = operatories.filter(o => o.hasSchedules).length;
+      const totalSchedules = providers.reduce((sum, p) => sum + (p.scheduleCount || 0), 0);
+      const defaultProvider = providers.find(p => p.provNum === config.defaults.provNum);
+      const defaultOperatory = operatories.find(o => o.opNum === config.defaults.opNum);
+      
+      const scheduleConfig = {
+        totalSchedules,
+        providersWithSchedules,
+        operatoriesWithSchedules,
+        defaultProviderHasSchedule: defaultProvider?.hasSchedules || false,
+        defaultOperatoryHasSchedule: defaultOperatory?.hasSchedules || false
+      };
+      
+      const fetchTime = Date.now() - startTime;
 
-    return {
-      providers,
-      operatories,
-      occupiedSlots,
-      officeHours: config.availability.officeHours,
-      defaults: config.defaults,
-      fetchedAt: now.toISOString(),
-      expiresAt: expiresAt.toISOString()
-    };
+      return {
+        providers,
+        operatories,
+        occupiedSlots,
+        officeHours: config.availability.officeHours,
+        defaults: config.defaults,
+        fetchedAt: now.toISOString(),
+        expiresAt: expiresAt.toISOString(),
+        scheduleConfig
+      };
+    } catch (scheduleError) {
+      // Return context without schedule data if schedule fetch fails
+
+      return {
+        providers,
+        operatories,
+        occupiedSlots,
+        officeHours: config.availability.officeHours,
+        defaults: config.defaults,
+        fetchedAt: now.toISOString(),
+        expiresAt: expiresAt.toISOString()
+      };
+    }
 
   } catch (error) {
-    console.error('[fetchOfficeContext] ❌ Error:', error);
-    
     // Return minimal fallback context
     const now = new Date();
     return {
@@ -250,7 +398,6 @@ export function detectConflicts(
   const requestedTime = new Date(requestedDateTime);
   const requestedEndTime = new Date(requestedTime.getTime() + config.conflictWindowMinutes * 60000);
 
-  console.log(`[detectConflicts] Checking ${context.occupiedSlots.length} occupied slots...`);
 
   for (const slot of context.occupiedSlots) {
     const slotTime = new Date(slot.aptDateTime);
@@ -309,9 +456,7 @@ export function detectConflicts(
   const hasConflict = !config.allowDoubleBooking && conflicts.length > 0;
   
   if (hasConflict) {
-    console.log(`[detectConflicts] ⚠️ Found ${conflicts.length} conflicts`);
   } else {
-    console.log(`[detectConflicts] ✅ No conflicts detected`);
   }
 
   return {

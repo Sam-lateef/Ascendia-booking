@@ -400,7 +400,7 @@ npm run dev
 ## Credits
 
 **Implementation Date**: October 29, 2025  
-**Agent0 Version**: 1.0  
+**Ascendia AI Version**: 1.0  
 **OpenAI Models Used**:
 - Realtime API: `gpt-4o-realtime-preview-2025-06-03`
 - Supervisor: `gpt-4o-mini`

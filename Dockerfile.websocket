@@ -1,0 +1,43 @@
+# Dockerfile for WebSocket server on Fly.io
+FROM node:20-alpine AS base
+
+# Install dependencies only when needed
+FROM base AS deps
+RUN apk add --no-cache libc6-compat
+WORKDIR /app
+
+# Install dependencies
+COPY package.json package-lock.json* ./
+RUN npm ci
+
+# Copy source code and build
+FROM base AS runner
+WORKDIR /app
+
+ENV NODE_ENV production
+ENV PORT 8080
+ENV HOSTNAME "0.0.0.0"
+
+RUN addgroup --system --gid 1001 nodejs
+RUN adduser --system --uid 1001 appuser
+
+# Copy dependencies
+COPY --from=deps /app/node_modules ./node_modules
+
+# Copy all necessary source files for the WebSocket server
+COPY src/retell ./src/retell
+COPY src/twilio ./src/twilio
+COPY src/app/agentConfigs ./src/app/agentConfigs
+COPY src/app/lib ./src/app/lib
+COPY package.json ./
+COPY tsconfig.json ./
+
+# Set ownership
+RUN chown -R appuser:nodejs /app
+
+USER appuser
+
+EXPOSE 8080
+
+# Use tsx to run TypeScript directly
+CMD ["npx", "tsx", "src/retell/server.ts"]

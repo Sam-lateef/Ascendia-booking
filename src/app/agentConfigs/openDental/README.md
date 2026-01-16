@@ -356,7 +356,7 @@ Edit orchestratorAgent.ts instructions to add specific workflows:
 
 ## Architecture Notes
 
-This implements the **Chat-Supervisor pattern** from Agent0:
+This implements the **Chat-Supervisor pattern** from Ascendia AI:
 - Lightweight realtime agent (Tier 1)
 - Intelligent supervisor via Responses API (Tier 2)  
 - Server-side execution for security (Tier 3)

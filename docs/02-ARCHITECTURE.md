@@ -223,6 +223,7 @@ const session = new RealtimeSession(rootAgent, {
     outputAudioFormat: 'pcm16',
     inputAudioTranscription: {
       model: 'gpt-4o-mini-transcribe',
+      language: 'en', // Explicitly set to English to prevent language mixing
     },
   },
 });
@@ -248,9 +249,9 @@ session.transport.sendEvent({
   session: {
     turn_detection: {
       type: 'server_vad',
-      threshold: 0.9,
+      threshold: 0.92, // Higher threshold to prevent echo/feedback
       prefix_padding_ms: 300,
-      silence_duration_ms: 500,
+      silence_duration_ms: 1200, // Longer silence to prevent picking up agent's voice
       create_response: true,
     },
   },

@@ -2,7 +2,7 @@
 
 ## What Was Built
 
-A **three-tier voice-enabled dental office agent system** that integrates with OpenDental API (357 functions) using the Agent0 platform.
+A **three-tier voice-enabled dental office agent system** that integrates with OpenDental API (357 functions) using the Ascendia AI platform.
 
 ### System Architecture
 
@@ -413,12 +413,12 @@ Add more priority functions or enable all 357 functions
 - **Full System Docs:** `src/app/agentConfigs/openDental/README.md`
 - **API Documentation:** `docs/API/apiDoc.md` (1,198 lines)
 - **API Registry:** `docs/API/api_registry.json` (357 endpoints)
-- **Agent0 Docs:** `docs/` directory (6 guides)
+- **Ascendia AI Docs:** `docs/` directory (6 guides)
 - **OpenDental API Spec:** https://www.opendental.com/site/apispecification.html
 
 ## Architecture Pattern
 
-This uses the **Chat-Supervisor pattern** from Agent0:
+This uses the **Chat-Supervisor pattern** from Ascendia AI:
 - ✅ Lightweight realtime agent handles simple tasks (70%)
 - ✅ Intelligent supervisor handles complex operations (30%)
 - ✅ Supervisor has ALL business logic and tools
@@ -432,7 +432,7 @@ Perfect for migrating dental office operations to voice!
 For issues or questions:
 1. Check `src/app/agentConfigs/openDental/README.md`
 2. Review `docs/API/apiDoc.md` for API details
-3. Check Agent0 documentation in `docs/` directory
+3. Check Ascendia AI documentation in `docs/` directory
 
 ## Summary
 

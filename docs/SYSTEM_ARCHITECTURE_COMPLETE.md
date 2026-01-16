@@ -2,7 +2,7 @@
 
 ## Overview
 
-Agent0 uses a **2-tier intelligent routing** system with an optimized orchestrator:
+Ascendia AI uses a **2-tier intelligent routing** system with an optimized orchestrator:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -265,7 +265,7 @@ Orchestrator:
 
 ## Conclusion
 
-Agent0 now has an **intelligent 2-tier architecture** that:
+Ascendia AI now has an **intelligent 2-tier architecture** that:
 
 1. **Tier 1 (Lexi)**: Natural voice interface, intent extraction
 2. **Tier 2 (Orchestrator)**: Smart AI routing with 49 priority functions and conversation history awareness

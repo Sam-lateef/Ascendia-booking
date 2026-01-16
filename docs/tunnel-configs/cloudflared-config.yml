@@ -1,0 +1,16 @@
+# Cloudflare Tunnel Configuration
+# This file configures the tunnel to only expose /agent-ui
+
+tunnel: agent-ui
+credentials-file: C:\Users\samla\.cloudflared\<tunnel-id>.json
+
+ingress:
+  # Route only /agent-ui and its sub-paths
+  - hostname: agent-ui.yourdomain.com  # Replace with your domain
+    service: http://localhost:3001
+    path: /agent-ui*
+  # Return 404 for root and all other paths
+  - service: http_status:404
+
+
+

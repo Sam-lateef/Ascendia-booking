@@ -4,15 +4,8 @@ import { SessionStatus } from "@/app/types";
 interface BottomToolbarProps {
   sessionStatus: SessionStatus;
   onToggleConnection: () => void;
-  isPTTActive: boolean;
-  setIsPTTActive: (val: boolean) => void;
-  isPTTUserSpeaking: boolean;
-  handleTalkButtonDown: () => void;
-  handleTalkButtonUp: () => void;
   isEventsPaneExpanded: boolean;
   setIsEventsPaneExpanded: (val: boolean) => void;
-  isAudioPlaybackEnabled: boolean;
-  setIsAudioPlaybackEnabled: (val: boolean) => void;
   codec: string;
   onCodecChange: (newCodec: string) => void;
 }
@@ -20,15 +13,8 @@ interface BottomToolbarProps {
 function BottomToolbar({
   sessionStatus,
   onToggleConnection,
-  isPTTActive,
-  setIsPTTActive,
-  isPTTUserSpeaking,
-  handleTalkButtonDown,
-  handleTalkButtonUp,
   isEventsPaneExpanded,
   setIsEventsPaneExpanded,
-  isAudioPlaybackEnabled,
-  setIsAudioPlaybackEnabled,
   codec,
   onCodecChange,
 }: BottomToolbarProps) {
@@ -76,55 +62,6 @@ function BottomToolbar({
       >
         {getConnectionButtonLabel()}
       </button>
-
-      <div className="flex flex-row items-center gap-2">
-        <input
-          id="push-to-talk"
-          type="checkbox"
-          checked={isPTTActive}
-          onChange={(e) => setIsPTTActive(e.target.checked)}
-          disabled={!isConnected}
-        />
-        <label
-          htmlFor="push-to-talk"
-          className="flex items-center cursor-pointer"
-          style={{ color: 'var(--text-gray)' }}
-        >
-          Push to talk
-        </label>
-        <button
-          onMouseDown={handleTalkButtonDown}
-          onMouseUp={handleTalkButtonUp}
-          onTouchStart={handleTalkButtonDown}
-          onTouchEnd={handleTalkButtonUp}
-          disabled={!isPTTActive}
-          className="py-1 px-4 cursor-pointer"
-          style={{
-            background: isPTTUserSpeaking ? 'var(--border-gray)' : 'var(--dark-4)',
-            color: 'var(--text-gray)',
-            opacity: !isPTTActive ? 0.4 : 1
-          }}
-        >
-          Talk
-        </button>
-      </div>
-
-      <div className="flex flex-row items-center gap-1">
-        <input
-          id="audio-playback"
-          type="checkbox"
-          checked={isAudioPlaybackEnabled}
-          onChange={(e) => setIsAudioPlaybackEnabled(e.target.checked)}
-          disabled={!isConnected}
-        />
-        <label
-          htmlFor="audio-playback"
-          className="flex items-center cursor-pointer"
-          style={{ color: 'var(--text-gray)' }}
-        >
-          Audio playback
-        </label>
-      </div>
 
       <div className="flex flex-row items-center gap-2">
         <input

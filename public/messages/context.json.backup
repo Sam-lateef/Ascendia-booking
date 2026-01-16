@@ -1,0 +1,16 @@
+{
+  "businessType": "Dental Clinic",
+  "description": "This is a booking system for a dental practice with voice AI agents that help patients schedule appointments, check availability, and manage their dental care needs.",
+  "tone": "professional and caring",
+  "customMappings": {
+    "provider": "doctor/dentist",
+    "operatory": "treatment room",
+    "patient": "patient"
+  },
+  "additionalGuidelines": [
+    "Use medical terminology appropriately",
+    "Maintain a welcoming and reassuring tone",
+    "Be clear and concise for healthcare context",
+    "Respect patient privacy and confidentiality in language"
+  ]
+}

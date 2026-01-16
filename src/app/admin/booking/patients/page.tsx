@@ -1,0 +1,450 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
+import { Button } from '@/components/ui/button';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+
+interface Patient {
+  PatNum: number;
+  FName: string;
+  LName: string;
+  WirelessPhone: string;
+  Birthdate: string;
+  DateCreated?: string;
+  DateTStamp?: string;
+}
+
+export default function PatientsPage() {
+  const t = useTranslations('patients');
+  const tCommon = useTranslations('common');
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingPatient, setEditingPatient] = useState<Patient | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    // Load all patients by default on mount
+    fetchAllPatients();
+  }, []);
+
+  useEffect(() => {
+    // When search query changes, perform search
+    if (searchQuery) {
+      fetchPatients();
+    } else {
+      // If search is cleared, reload all patients
+      fetchAllPatients();
+    }
+  }, [searchQuery]);
+
+  const fetchAllPatients = async () => {
+    try {
+      setLoading(true);
+      // Use GetAllPatients to fetch all patients without search parameters
+      const response = await fetch('/api/booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          functionName: 'GetAllPatients',
+          parameters: {},
+        }),
+      });
+      const data = await response.json();
+      setPatients(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching patients:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPatients = async () => {
+    try {
+      setLoading(true);
+      const [firstName, ...lastNameParts] = searchQuery.split(' ');
+      const lastName = lastNameParts.join(' ');
+      
+      const params: any = {};
+      if (firstName) params.FName = firstName;
+      if (lastName) params.LName = lastName;
+      if (!firstName && !lastName && searchQuery) {
+        // Assume it's a phone number if no space
+        params.Phone = searchQuery.replace(/\D/g, '');
+      }
+
+      const response = await fetch('/api/booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          functionName: 'GetMultiplePatients',
+          parameters: params,
+        }),
+      });
+      const data = await response.json();
+      setPatients(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching patients:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleEdit = (patient: Patient) => {
+    setEditingPatient(patient);
+    setIsDialogOpen(true);
+  };
+
+  const handleDelete = async (patNum: number) => {
+    if (!confirm('Are you sure you want to delete this patient? This will also delete all their appointments.')) return;
+
+    try {
+      const response = await fetch('/api/booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          functionName: 'DeletePatient',
+          parameters: { PatNum: patNum },
+        }),
+      });
+
+      if (response.ok) {
+        if (searchQuery) {
+          fetchPatients();
+        } else {
+          fetchAllPatients();
+        }
+      } else {
+        const error = await response.json();
+        alert(error.message || 'Failed to delete patient');
+      }
+    } catch (error) {
+      console.error('Error deleting patient:', error);
+      alert('Error deleting patient');
+    }
+  };
+
+  const handleSave = async (formData: FormData) => {
+    try {
+      const params: any = {
+        PatNum: editingPatient?.PatNum,
+        FName: formData.get('fName'),
+        LName: formData.get('lName'),
+        WirelessPhone: formData.get('phone'),
+        Birthdate: formData.get('birthdate'),
+        Email: formData.get('email'),
+      };
+
+      const response = await fetch('/api/booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          functionName: editingPatient ? 'UpdatePatient' : 'CreatePatient',
+          parameters: params,
+        }),
+      });
+
+      if (response.ok) {
+        setIsDialogOpen(false);
+        setEditingPatient(null);
+        // Reload patients after save
+        if (searchQuery) {
+          fetchPatients();
+        } else {
+          fetchAllPatients();
+        }
+      } else {
+        const error = await response.json();
+        alert(error.message || 'Failed to save patient');
+      }
+    } catch (error) {
+      console.error('Error saving patient:', error);
+      alert('Error saving patient');
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Patients</h1>
+          <p className="text-gray-600 mt-2">Search and manage patient records</p>
+        </div>
+        <div className="text-center py-8 text-gray-500">
+          {t('loading')}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4 md:space-y-6">
+      {/* Header - Responsive */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">{t('title')}</h1>
+          <p className="text-sm md:text-base text-gray-600 mt-1 md:mt-2">{t('subtitle')}</p>
+        </div>
+        <Button 
+          onClick={() => {
+            setEditingPatient(null);
+            setIsDialogOpen(true);
+          }}
+          className="w-full sm:w-auto"
+        >
+          + {tCommon('new')} {t('title')}
+        </Button>
+      </div>
+
+      {/* Search - Responsive */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+        <Input
+          placeholder={t('searchPlaceholder')}
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyPress={(e) => {
+            if (e.key === 'Enter') {
+              fetchPatients();
+            }
+          }}
+          className="flex-1 sm:max-w-md"
+        />
+        <Button onClick={fetchPatients} className="w-full sm:w-auto">{t('search')}</Button>
+      </div>
+
+      {/* Desktop Table View */}
+      <div className="hidden md:block border rounded-lg overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>{t('patNum')}</TableHead>
+              <TableHead>{tCommon('name')}</TableHead>
+              <TableHead>{tCommon('phone')}</TableHead>
+              <TableHead>{tCommon('birthdate')}</TableHead>
+              <TableHead>{tCommon('create') || 'Created'}</TableHead>
+              <TableHead>{tCommon('update') || 'Modified'}</TableHead>
+              <TableHead>{tCommon('actions')}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {patients.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-gray-500 py-8">
+                  {searchQuery ? t('noPatients') : t('noPatients')}
+                </TableCell>
+              </TableRow>
+            ) : (
+              patients.map((patient) => (
+                <TableRow key={patient.PatNum}>
+                  <TableCell>{patient.PatNum}</TableCell>
+                  <TableCell>
+                    {patient.FName} {patient.LName}
+                  </TableCell>
+                  <TableCell>{patient.WirelessPhone || '-'}</TableCell>
+                  <TableCell>{patient.Birthdate || '-'}</TableCell>
+                  <TableCell className="text-xs text-gray-600">
+                    {patient.DateCreated ? new Date(patient.DateCreated).toLocaleDateString() : '-'}
+                    <br />
+                    {patient.DateCreated ? new Date(patient.DateCreated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                  </TableCell>
+                  <TableCell className="text-xs text-gray-600">
+                    {patient.DateTStamp ? new Date(patient.DateTStamp).toLocaleDateString() : '-'}
+                    <br />
+                    {patient.DateTStamp ? new Date(patient.DateTStamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEdit(patient)}
+                      >
+                        {tCommon('edit')}
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDelete(patient.PatNum)}
+                      >
+                        {tCommon('delete')}
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Mobile Card View */}
+      <div className="md:hidden space-y-4">
+        {patients.length === 0 ? (
+          <div className="text-center text-gray-500 py-8 border rounded-lg">
+            {searchQuery ? 'No patients found matching your search' : 'No patients found'}
+          </div>
+        ) : (
+          patients.map((patient) => (
+            <div key={patient.PatNum} className="border rounded-lg p-4 space-y-3 bg-white">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <div className="text-lg font-semibold text-gray-900">
+                    {patient.FName} {patient.LName}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-0.5">ID: {patient.PatNum}</div>
+                </div>
+              </div>
+              <div className="space-y-2 text-sm">
+                {patient.WirelessPhone && (
+                  <div>
+                    <span className="font-medium text-gray-700">{tCommon('phone')}: </span>
+                    <span className="text-gray-900">{patient.WirelessPhone}</span>
+                  </div>
+                )}
+                {patient.Birthdate && (
+                  <div>
+                    <span className="font-medium text-gray-700">{tCommon('birthdate')}: </span>
+                    <span className="text-gray-900">{patient.Birthdate}</span>
+                  </div>
+                )}
+                {patient.DateCreated && (
+                  <div className="text-xs text-gray-500">
+                    <span className="font-medium">Created: </span>
+                    {new Date(patient.DateCreated).toLocaleDateString()} {new Date(patient.DateCreated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                )}
+                {patient.DateTStamp && (
+                  <div className="text-xs text-gray-500">
+                    <span className="font-medium">Modified: </span>
+                    {new Date(patient.DateTStamp).toLocaleDateString()} {new Date(patient.DateTStamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                )}
+              </div>
+              <div className="flex gap-2 pt-2 border-t">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => handleEdit(patient)}
+                  className="flex-1"
+                >
+                  {tCommon('edit')}
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleDelete(patient.PatNum)}
+                  className="flex-1"
+                >
+                  {tCommon('delete')}
+                </Button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Edit/Create Dialog - Responsive */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {editingPatient ? `${tCommon('edit')} ${t('title')}` : `${tCommon('new')} ${t('title')}`}
+            </DialogTitle>
+            <DialogDescription>
+              {editingPatient
+                ? t('updatePatientInfo') || 'Update patient information'
+                : t('createNewPatient') || 'Create a new patient record'}
+            </DialogDescription>
+          </DialogHeader>
+          <form action={handleSave}>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="fName">{t('firstName')} *</Label>
+                  <Input
+                    id="fName"
+                    name="fName"
+                    defaultValue={editingPatient?.FName || ''}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="lName">{t('lastName')} *</Label>
+                  <Input
+                    id="lName"
+                    name="lName"
+                    defaultValue={editingPatient?.LName || ''}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="phone">{tCommon('phone')} *</Label>
+                  <Input
+                    id="phone"
+                    name="phone"
+                    type="tel"
+                    defaultValue={editingPatient?.WirelessPhone || ''}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="birthdate">Birthdate *</Label>
+                  <Input
+                    id="birthdate"
+                    name="birthdate"
+                    type="date"
+                    defaultValue={editingPatient?.Birthdate || ''}
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  defaultValue={(editingPatient as any)?.Email || ''}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsDialogOpen(false);
+                  setEditingPatient(null);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">Save</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+

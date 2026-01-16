@@ -63,6 +63,15 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     console.log('[OpenDental API] Received request:', body);
     
+    // Log API key being used (first 20 chars only for security)
+    const apiKey = process.env.OPENDENTAL_API_KEY;
+    if (apiKey) {
+      const keyPreview = apiKey.length > 20 ? apiKey.substring(0, 20) + '...' : apiKey;
+      console.log('[OpenDental API] Using API key:', keyPreview);
+    } else {
+      console.warn('[OpenDental API] ⚠️ OPENDENTAL_API_KEY not set!');
+    }
+    
     const { functionName, parameters } = body;
 
     if (!functionName) {
@@ -73,14 +82,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Block GetAvailableSlots - not supported, use GetAppointments instead
-    if (functionName === 'GetAvailableSlots' || functionName === 'GetAppointmentSlots') {
-      console.error('[OpenDental API] GetAvailableSlots/GetAppointmentSlots is not supported. Use GetAppointments instead.');
+    // Block GetAppointmentSlots - this endpoint is not supported (different from GetAvailableSlots)
+    if (functionName === 'GetAppointmentSlots') {
+      console.error('[OpenDental API] GetAppointmentSlots is not supported. Use GetAvailableSlots instead.');
       return NextResponse.json(
         { 
           error: true,
-          message: 'GetAvailableSlots and GetAppointmentSlots are not supported. Use GetAppointments with dateStart and dateEnd parameters instead.',
-          alternative: 'Use GetAppointments(DateStart="YYYY-MM-DD", DateEnd="YYYY-MM-DD") to check availability'
+          message: 'GetAppointmentSlots is not supported. Use GetAvailableSlots (GET /appointments/Slots) instead.',
+          alternative: 'Use GetAvailableSlots(dateStart="YYYY-MM-DD", dateEnd="YYYY-MM-DD", ProvNum=X, OpNum=Y) to check availability'
         },
         { status: 400 }
       );
@@ -119,6 +128,148 @@ export async function POST(req: NextRequest) {
               required: false,
               type: 'string',
               description: 'Get providers altered after this date/time (yyyy-MM-dd HH:mm:ss)'
+            }
+          },
+          request_example: {},
+          response_example: {},
+          error_codes: {},
+        } as unknown as EndpointInfo;
+      } else if (functionName === 'GetPatient') {
+        // GetPatient endpoint - GET /patients/{PatNum}
+        endpoint = {
+          function_name: 'GetPatient',
+          endpoint: '/patients/{PatNum}',
+          method: 'GET',
+          description: 'Get a specific patient by PatNum',
+          parameters: {
+            PatNum: {
+              required: true,
+              type: 'number',
+              description: 'Patient number to retrieve'
+            }
+          },
+          request_example: {},
+          response_example: {},
+          error_codes: {},
+        } as unknown as EndpointInfo;
+      } else if (functionName === 'DeleteAppointment') {
+        // DeleteAppointment endpoint - DELETE /appointments/{AptNum}
+        endpoint = {
+          function_name: 'DeleteAppointment',
+          endpoint: '/appointments/{AptNum}',
+          method: 'DELETE',
+          description: 'Permanently delete an appointment',
+          parameters: {
+            AptNum: {
+              required: true,
+              type: 'number',
+              description: 'Appointment number to delete'
+            }
+          },
+          request_example: {},
+          response_example: {},
+          error_codes: {},
+        } as unknown as EndpointInfo;
+      } else if (functionName === 'CreateSchedule') {
+        // CreateSchedule endpoint - POST /schedules
+        endpoint = {
+          function_name: 'CreateSchedule',
+          endpoint: '/schedules',
+          method: 'POST',
+          description: 'Create a new schedule entry for a provider, operatory, or blockout',
+          parameters: {
+            SchedDate: {
+              required: true,
+              type: 'string',
+              description: 'Schedule date in YYYY-MM-DD format'
+            },
+            StartTime: {
+              required: true,
+              type: 'string',
+              description: 'Start time in HH:mm:ss format (e.g., "08:00:00")'
+            },
+            StopTime: {
+              required: true,
+              type: 'string',
+              description: 'Stop time in HH:mm:ss format (e.g., "17:00:00")'
+            },
+            SchedType: {
+              required: true,
+              type: 'string',
+              description: 'Type of schedule: "Practice", "Provider", "Blockout", "Employee", "WebSchedASAP"'
+            },
+            ProvNum: {
+              required: false,
+              type: 'number',
+              description: 'Provider number (required if SchedType is "Provider")'
+            },
+            OperatoryNum: {
+              required: false,
+              type: 'number',
+              description: 'Operatory number (can specify multiple as comma-separated string in operatories field)'
+            },
+            operatories: {
+              required: false,
+              type: 'string',
+              description: 'Comma-separated list of operatory numbers (e.g., "1,2,3")'
+            },
+            Note: {
+              required: false,
+              type: 'string',
+              description: 'Optional note for the schedule'
+            },
+            BlockoutType: {
+              required: false,
+              type: 'number',
+              description: 'Blockout type definition number (for Blockout schedules)'
+            }
+          },
+          request_example: {},
+          response_example: {},
+          error_codes: {},
+        } as unknown as EndpointInfo;
+      } else if (functionName === 'UpdateSchedule') {
+        // UpdateSchedule endpoint - PUT /schedules/{ScheduleNum}
+        endpoint = {
+          function_name: 'UpdateSchedule',
+          endpoint: '/schedules/{ScheduleNum}',
+          method: 'PUT',
+          description: 'Update an existing schedule entry',
+          parameters: {
+            ScheduleNum: {
+              required: true,
+              type: 'number',
+              description: 'Schedule number to update'
+            },
+            SchedDate: {
+              required: false,
+              type: 'string',
+              description: 'Schedule date in YYYY-MM-DD format'
+            },
+            StartTime: {
+              required: false,
+              type: 'string',
+              description: 'Start time in HH:mm:ss format'
+            },
+            StopTime: {
+              required: false,
+              type: 'string',
+              description: 'Stop time in HH:mm:ss format'
+            },
+            ProvNum: {
+              required: false,
+              type: 'number',
+              description: 'Provider number'
+            },
+            operatories: {
+              required: false,
+              type: 'string',
+              description: 'Comma-separated list of operatory numbers'
+            },
+            Note: {
+              required: false,
+              type: 'string',
+              description: 'Optional note'
             }
           },
           request_example: {},
@@ -204,6 +355,15 @@ export async function POST(req: NextRequest) {
       mappedParameters.AppointmentId = mappedParameters.AptNum;
     }
     
+    // For DeleteAppointment: Map AptNum to path parameter (already in path, but ensure it's available)
+    if (functionName === 'DeleteAppointment' && mappedParameters.AptNum) {
+      // AptNum is already used in the path, no additional mapping needed
+      // But ensure it's a number
+      if (typeof mappedParameters.AptNum === 'string') {
+        mappedParameters.AptNum = parseInt(mappedParameters.AptNum, 10);
+      }
+    }
+    
     // For UpdatePatient: Map PatNum to id for path parameter
     if (functionName === 'UpdatePatient' && mappedParameters.PatNum) {
       mappedParameters.id = mappedParameters.PatNum;
@@ -223,18 +383,79 @@ export async function POST(req: NextRequest) {
             conflictDetails: conflictCheck.details
           },
           { status: 409 } // 409 Conflict
+          );
+        }
+      }
+    
+    // Check appointment status before breaking it
+    if (functionName === 'BreakAppointment') {
+      const statusCheck = await checkAppointmentStatusBeforeBreak(mappedParameters);
+      if (statusCheck.hasError) {
+        console.error('[OpenDental API] ❌ Cannot break appointment:', statusCheck.message);
+        return NextResponse.json(
+          {
+            error: true,
+            message: statusCheck.message,
+            details: statusCheck.details
+          },
+          { status: 400 } // 400 Bad Request
         );
       }
     }
-
+    
     // Execute real API call
-    const response = await executeOpenDentalApiCall(endpoint, mappedParameters);
-    return NextResponse.json(response);
+    try {
+      const response = await executeOpenDentalApiCall(endpoint, mappedParameters);
+      return NextResponse.json(response);
+    } catch (error: any) {
+      // If BreakAppointment fails due to breakType not being enabled, retry without breakType
+      if (functionName === 'BreakAppointment' && error.status === 400) {
+        const errorDetails = typeof error.details === 'string' 
+          ? error.details 
+          : JSON.stringify(error.details || {});
+        const errorMessage = error.message || '';
+        
+        if (errorDetails.includes('breakType is invalid') || 
+            errorDetails.includes('is not enabled by the Dental Office') ||
+            errorMessage.includes('breakType is invalid') ||
+            errorMessage.includes('is not enabled by the Dental Office')) {
+          
+          console.warn('[OpenDental API] breakType not enabled, retrying without breakType');
+          
+          // Remove breakType from parameters and retry
+          const { breakType, ...retryParameters } = mappedParameters;
+          const retryResponse = await executeOpenDentalApiCall(endpoint, retryParameters);
+          return NextResponse.json(retryResponse);
+        }
+      }
+      
+      // Re-throw if it's not a breakType error
+      throw error;
+    }
 
   } catch (error: any) {
     console.error('[OpenDental API Error]', error);
+    
+    // Check for connection errors (VM offline, network issues)
+    const errorMessage = (error.message || '').toLowerCase();
+    const isConnectionError = 
+      error.code === 'ECONNREFUSED' ||
+      error.code === 'ETIMEDOUT' ||
+      error.code === 'ENOTFOUND' ||
+      error.code === 'ECONNRESET' ||
+      errorMessage.includes('fetch failed') ||
+      errorMessage.includes('network error') ||
+      errorMessage.includes('connection refused') ||
+      errorMessage.includes('timeout') ||
+      errorMessage.includes('unreachable') ||
+      (error.name && error.name === 'TypeError' && errorMessage.includes('fetch'));
+    
+    const errorResponse = formatErrorResponse(error, 'API call failed');
     return NextResponse.json(
-      formatErrorResponse(error, 'API call failed'),
+      {
+        ...errorResponse,
+        errorType: isConnectionError ? 'opendental_connection' : 'unknown'
+      },
       { status: error.status || 500 }
     );
   }
@@ -369,6 +590,62 @@ async function checkAppointmentConflict(
 }
 
 /**
+ * Check appointment status before breaking it
+ * Only appointments with AptStatus of 'Scheduled' can be broken
+ */
+async function checkAppointmentStatusBeforeBreak(
+  parameters: Record<string, any>
+): Promise<{ hasError: boolean; message?: string; details?: any }> {
+  const aptNum = parameters.AptNum;
+  
+  if (!aptNum) {
+    return {
+      hasError: true,
+      message: 'AptNum is required to break an appointment'
+    };
+  }
+
+  try {
+    // Get the appointment to check its status
+    const baseUrl = getOpenDentalBaseUrl();
+    const url = `${baseUrl.replace(/\/$/, '')}/appointments/${aptNum}`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: getOpenDentalAuthHeader(),
+    });
+
+    if (!response.ok) {
+      // If we can't check, proceed anyway (let the API handle it)
+      console.warn('[OpenDental API] Could not check appointment status, proceeding with break');
+      return { hasError: false };
+    }
+
+    const appointment = await response.json();
+    
+    // Check if appointment status is 'Scheduled'
+    if (appointment.AptStatus && appointment.AptStatus !== 'Scheduled') {
+      return {
+        hasError: true,
+        message: `Only appointments with an AptStatus of Scheduled can be broken. Current status: ${appointment.AptStatus}`,
+        details: {
+          aptNum,
+          currentStatus: appointment.AptStatus,
+          requiredStatus: 'Scheduled'
+        }
+      };
+    }
+
+    return { hasError: false };
+  } catch (error: any) {
+    // If status check fails, log warning but don't block the operation
+    // The API will handle the error if the appointment can't be broken
+    console.warn('[OpenDental API] Status check failed:', error.message);
+    return { hasError: false };
+  }
+}
+
+/**
  * Execute actual OpenDental API call
  */
 async function executeOpenDentalApiCall(
@@ -467,8 +744,7 @@ function getMockResponse(functionName: string, parameters: Record<string, any>) 
     case 'UpdatePatient':
       return { success: true, message: 'Patient updated successfully' };
 
-    case 'DeletePatient':
-      return { success: true, message: 'Patient deleted successfully' };
+    // DeletePatient removed - function does not exist in OpenDental API
 
     // Provider operations
     case 'GetProviders':

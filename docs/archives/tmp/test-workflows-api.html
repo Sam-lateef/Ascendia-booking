@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Workflows API</title>
+</head>
+<body>
+    <h1>Workflows API Test</h1>
+    <button onclick="testAPI()">Test API</button>
+    <pre id="result"></pre>
+
+    <script>
+        async function testAPI() {
+            const result = document.getElementById('result');
+            result.textContent = 'Loading...';
+            
+            try {
+                // Test workflows API
+                const workflowsRes = await fetch('http://localhost:3000/api/admin/config/workflows');
+                const workflowsData = await workflowsRes.json();
+                
+                result.textContent = 'Workflows API Response:\n' + JSON.stringify(workflowsData, null, 2);
+                
+                // Also test domains API
+                const domainsRes = await fetch('http://localhost:3000/api/admin/config/domains');
+                const domainsData = await domainsRes.json();
+                
+                result.textContent += '\n\nDomains API Response:\n' + JSON.stringify(domainsData, null, 2);
+            } catch (err) {
+                result.textContent = 'Error: ' + err.message;
+            }
+        }
+    </script>
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
