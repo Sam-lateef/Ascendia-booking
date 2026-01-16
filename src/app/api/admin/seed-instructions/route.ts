@@ -3,7 +3,8 @@
  * One-time endpoint to populate the database with current hardcoded instructions
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentOrganization } from '@/app/lib/apiHelpers';
 import { createClient } from '@supabase/supabase-js';
 import { supervisorInstructions } from '@/app/agentConfigs/embeddedBooking/supervisorAgent';
 import { generateLexiInstructions } from '@/app/agentConfigs/embeddedBooking/lexiAgentTwilio';
@@ -368,8 +369,17 @@ REMEMBER:
 ═══════════════════════════════════════════════════════════════════════════════
 `;
 
-export async function POST() {
+export async function POST(request: NextRequest) {
   try {
+    // Verify authentication
+    const context = await getCurrentOrganization(request);
+    if (!['owner', 'admin'].includes(context.role)) {
+      return NextResponse.json(
+        { error: 'Permission denied' },
+        { status: 403 }
+      );
+    }
+    
     if (!supabaseUrl || !supabaseAnonKey) {
       return NextResponse.json({ 
         error: 'Supabase not configured',

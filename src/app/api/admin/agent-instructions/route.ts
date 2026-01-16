@@ -5,14 +5,18 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentOrganization } from '@/app/lib/apiHelpers';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SYSTEM_AGENT_ID = 'lexi-twilio';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Verify authentication
+    await getCurrentOrganization(request);
+    
     if (!supabaseUrl || !supabaseAnonKey) {
       return NextResponse.json({ 
         error: 'Supabase not configured',
@@ -55,6 +59,15 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    // Verify authentication
+    const context = await getCurrentOrganization(req);
+    if (!['owner', 'admin'].includes(context.role)) {
+      return NextResponse.json(
+        { error: 'Permission denied' },
+        { status: 403 }
+      );
+    }
+    
     if (!supabaseUrl || !supabaseAnonKey) {
       return NextResponse.json({ 
         error: 'Supabase not configured',

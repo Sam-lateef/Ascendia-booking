@@ -5,10 +5,14 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { getCurrentOrganization } from '@/app/lib/apiHelpers';
 import { getAgentMode, setAgentMode, type AgentMode } from '@/app/lib/agentMode';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Verify authentication
+    await getCurrentOrganization(request);
+    
     const mode = await getAgentMode();
     return NextResponse.json({ 
       mode,
@@ -25,6 +29,15 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
+    // Verify authentication
+    const context = await getCurrentOrganization(req);
+    if (!['owner', 'admin'].includes(context.role)) {
+      return NextResponse.json(
+        { error: 'Permission denied' },
+        { status: 403 }
+      );
+    }
+    
     const body = await req.json();
     const { mode } = body;
 
