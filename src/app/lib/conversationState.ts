@@ -50,7 +50,7 @@ export interface ConversationMessage {
 
 export interface ConversationState {
   sessionId: string;
-  channel: 'voice' | 'sms' | 'whatsapp' | 'web'; // Communication channel
+  channel: 'retell' | 'twilio' | 'voice' | 'sms' | 'whatsapp' | 'web'; // Communication channel
   createdAt: Date;
   updatedAt: Date;
   
@@ -380,6 +380,14 @@ const conversationStates = new Map<string, ConversationState>();
 // Track Supabase conversation IDs for persistence
 const sessionToDbId = new Map<string, string>();
 
+/**
+ * Set the database ID for a session (used by WebSocket handlers after creating conversation)
+ */
+export function setSessionDbId(sessionId: string, dbId: string): void {
+  sessionToDbId.set(sessionId, dbId);
+  console.log(`[ConversationState] 📝 Set dbId for session ${sessionId}: ${dbId}`);
+}
+
 // ============================================
 // SUPABASE PERSISTENCE (async, non-blocking)
 // ============================================
@@ -448,6 +456,7 @@ async function persistConversationToSupabase(state: ConversationState): Promise<
 
 /**
  * Persist a message to Supabase
+ * Uses admin client to bypass RLS for server-side operations
  */
 async function persistMessageToSupabase(
   sessionId: string, 
@@ -456,20 +465,33 @@ async function persistMessageToSupabase(
   extractedData: Record<string, any> = {}
 ): Promise<void> {
   try {
-    const dbAny = db as any;
+    // Use admin client to bypass RLS for server-side operations (WebSocket handlers)
+    const dbAny = getSupabaseAdmin() as any;
     let dbId = sessionToDbId.get(sessionId);
+    let orgId: string | null = null;
     
     if (!dbId) {
-      // Find conversation ID
+      // Find conversation ID and org_id
       const { data: conv } = await dbAny
         .from('conversations')
-        .select('id')
+        .select('id, organization_id')
         .eq('session_id', sessionId)
         .single();
       
       if (conv && conv.id) {
         dbId = conv.id as string;
+        orgId = conv.organization_id;
         sessionToDbId.set(sessionId, dbId);
+      }
+    } else {
+      // Get org_id from conversation
+      const { data: conv } = await dbAny
+        .from('conversations')
+        .select('organization_id')
+        .eq('id', dbId)
+        .single();
+      if (conv) {
+        orgId = conv.organization_id;
       }
     }
     
@@ -478,6 +500,7 @@ async function persistMessageToSupabase(
         .from('conversation_messages')
         .insert({
           conversation_id: dbId,
+          organization_id: orgId,  // Required by DB constraint
           role: message.role,
           content: message.content,
           sequence_num: sequenceNum,
@@ -500,6 +523,7 @@ async function persistMessageToSupabase(
 
 /**
  * Persist a function call to Supabase
+ * Uses admin client to bypass RLS for server-side operations
  */
 async function persistFunctionCallToSupabase(
   sessionId: string,
@@ -510,33 +534,53 @@ async function persistFunctionCallToSupabase(
   autoFilledParams: Record<string, any> = {}
 ): Promise<void> {
   try {
-    const dbAny = db as any;
+    // Use admin client to bypass RLS for server-side operations (WebSocket handlers)
+    const dbAny = getSupabaseAdmin() as any;
     let dbId = sessionToDbId.get(sessionId);
+    let orgId: string | null = null;
     
     if (!dbId) {
       const { data: conv } = await dbAny
         .from('conversations')
-        .select('id')
+        .select('id, organization_id')
         .eq('session_id', sessionId)
         .single();
       
       if (conv && conv.id) {
         dbId = conv.id as string;
+        orgId = conv.organization_id;
         sessionToDbId.set(sessionId, dbId);
+      }
+    } else {
+      // Get org_id from conversation
+      const { data: conv } = await dbAny
+        .from('conversations')
+        .select('organization_id')
+        .eq('id', dbId)
+        .single();
+      if (conv) {
+        orgId = conv.organization_id;
       }
     }
     
     if (dbId) {
-      await dbAny
+      const { error: insertError } = await dbAny
         .from('function_calls')
         .insert({
           conversation_id: dbId,
+          organization_id: orgId,  // May be required by DB constraint
           function_name: functionName,
           parameters,
           result: result ? JSON.stringify(result).substring(0, 10000) : null, // Limit size
           error,
           auto_filled_params: autoFilledParams,
         });
+      
+      if (insertError) {
+        console.error(`[ConversationState] Error inserting function call ${functionName}:`, insertError);
+      } else {
+        console.log(`[ConversationState] ✓ Persisted function call: ${functionName}`);
+      }
     }
   } catch (err) {
     console.error('[ConversationState] Error persisting function call to Supabase:', err);

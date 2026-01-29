@@ -86,15 +86,18 @@ async function handleTwilioConnection(
   // Function to load channel config and connect to OpenAI
   // This is called AFTER we have the organization ID from customParameters
   async function initializeOpenAIConnection() {
+    console.log('[Twilio WS] 🔧 initializeOpenAIConnection called, configLoaded:', configLoaded);
     if (configLoaded) {
       console.log('[Twilio WS] ⚠️ Config already loaded, skipping');
       return;
     }
     configLoaded = true;
+    console.log('[Twilio WS] 🔧 Loading config for org:', organizationId);
 
     try {
       // Use provided org ID or fall back to default
       if (!organizationId) {
+        console.log('[Twilio WS] 🔧 No org ID, getting default...');
         organizationId = await getCachedDefaultOrganizationId();
         console.warn('[Twilio WS] ⚠️ No org ID provided, using default:', organizationId);
       } else {
@@ -405,7 +408,13 @@ async function handleTwilioConnection(
           
           // NOW initialize OpenAI connection with correct org context
           // This loads channel config from DB and connects to OpenAI
-          await initializeOpenAIConnection();
+          console.log('[Twilio WS] 🔄 About to initialize OpenAI connection...');
+          try {
+            await initializeOpenAIConnection();
+            console.log('[Twilio WS] ✅ OpenAI connection initialized');
+          } catch (initError) {
+            console.error('[Twilio WS] ❌ Error initializing OpenAI:', initError);
+          }
           
           // Initialize conversation state for this call (creates DB entry)
           if (callSid) {
@@ -413,18 +422,18 @@ async function handleTwilioConnection(
             state.intent = 'unknown'; // Will be detected from conversation
             console.log('[Twilio WS] 📊 Conversation state initialized:', `twilio_${callSid}`);
             
-            // Create conversation record in database with proper org context
-            // This mirrors the Retell implementation for consistency
+            // Create conversation record in database with admin client
+            // Admin client bypasses RLS for server-side WebSocket operations
             try {
-              const { getSupabaseWithOrg } = await import('@/app/lib/supabaseClient');
-              const supabase = await getSupabaseWithOrg(organizationId);
+              const { getSupabaseAdmin } = await import('@/app/lib/supabaseClient');
+              const supabase = getSupabaseAdmin();
               
               const { data, error } = await supabase
                 .from('conversations')
                 .insert({
                   session_id: `twilio_${callSid}`,
                   organization_id: organizationId,
-                  channel: 'voice',
+                  channel: 'voice',  // DB constraint only allows: voice, sms, whatsapp, web
                   
                   // Twilio fields
                   call_id: callSid,
@@ -446,6 +455,9 @@ async function handleTwilioConnection(
                 console.error('[Twilio WS] ❌ Error creating conversation:', error);
               } else {
                 console.log(`[Twilio WS] ✅ Created conversation: ${data.id} for org: ${organizationId}`);
+                // Set the dbId in conversationState so messages can be persisted
+                const { setSessionDbId } = await import('@/app/lib/conversationState');
+                setSessionDbId(`twilio_${callSid}`, data.id);
               }
             } catch (dbError) {
               console.error('[Twilio WS] ❌ Database error:', dbError);

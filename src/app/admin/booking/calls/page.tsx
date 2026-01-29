@@ -170,7 +170,7 @@ interface FunctionCall {
 
 interface Conversation {
   sessionId: string;
-  channel?: 'voice' | 'sms' | 'whatsapp' | 'web';
+  channel?: 'retell' | 'twilio' | 'voice' | 'sms' | 'whatsapp' | 'web';
   createdAt: string;
   updatedAt: string;
   intent: string;
@@ -293,13 +293,15 @@ export default function CallsPage() {
 
   const getChannelBadge = (channel?: string) => {
     const channelConfig: Record<string, { icon: string; label: string; color: string }> = {
-      voice: { icon: '📞', label: 'Phone', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
+      retell: { icon: '📞', label: 'Retell', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
+      twilio: { icon: '📱', label: 'Twilio', color: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200' },
+      voice: { icon: '📞', label: 'Voice', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
       sms: { icon: '💬', label: 'SMS', color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' },
       whatsapp: { icon: '📱', label: 'WhatsApp', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200' },
       web: { icon: '🌐', label: 'Web', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' },
     };
     
-    const config = channelConfig[channel || 'voice'] || channelConfig.voice;
+    const config = channelConfig[channel || 'voice'] || { icon: '❓', label: channel || 'Unknown', color: 'bg-gray-100 text-gray-800' };
     
     return (
       <Badge className={config.color}>

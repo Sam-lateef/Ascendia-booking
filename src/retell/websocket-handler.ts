@@ -456,7 +456,7 @@ expressWsInstance.app.ws('/llm-websocket/:org_slug_or_call_id/:call_id?', async 
             .insert({
               session_id: `retell_${callId}`,
               organization_id: orgId,
-              channel: 'voice',
+              channel: 'voice',  // DB constraint only allows: voice, sms, whatsapp, web
               call_id: callId,
               call_status: 'ongoing',
               start_timestamp: Date.now(),

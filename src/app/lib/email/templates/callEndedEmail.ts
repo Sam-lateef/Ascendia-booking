@@ -3,6 +3,14 @@
  * Professional HTML email for Retell call notifications
  */
 
+interface FunctionCallDetail {
+  functionName: string;
+  parameters: Record<string, any>;
+  result: any;
+  error?: string;
+  timestamp: string;
+}
+
 interface CallEmailData {
   callId: string;
   organizationName: string;
@@ -19,6 +27,7 @@ interface CallEmailData {
   publicLogUrl?: string;
   startTimestamp?: number;
   agentName?: string;
+  functionCalls?: FunctionCallDetail[];
 }
 
 /**
@@ -86,6 +95,176 @@ function getStatusEmoji(reason: string): string {
 }
 
 /**
+ * Format a function call into a human-readable action (matches UI formatAction)
+ */
+function formatAction(fc: FunctionCallDetail): { icon: string; text: string; success: boolean; time: string } {
+  const params = fc.parameters || {};
+  const result = fc.result;
+  const hasError = !!fc.error;
+  const time = fc.timestamp ? new Date(fc.timestamp).toLocaleTimeString('en-US', { 
+    hour: 'numeric', 
+    minute: '2-digit',
+    hour12: true 
+  }) : '';
+  
+  switch (fc.functionName) {
+    case 'CreatePatient': {
+      if (hasError) {
+        return { icon: '❌', text: `Failed to create patient: ${fc.error}`, success: false, time };
+      }
+      const name = `${params.FName || ''} ${params.LName || ''}`.trim() || 'Unknown';
+      const phone = params.WirelessPhone ? formatPhoneNumber(params.WirelessPhone) : '';
+      return { 
+        icon: '👤', 
+        text: `Patient Created: ${name}${phone ? ` (${phone})` : ''}`,
+        success: true, time 
+      };
+    }
+    
+    case 'CreateAppointment': {
+      if (hasError) {
+        return { icon: '❌', text: `Failed to book appointment: ${fc.error}`, success: false, time };
+      }
+      const dateTime = params.AptDateTime ? formatDateTime(params.AptDateTime) : 'Unknown time';
+      return { icon: '📅', text: `Appointment Booked: ${dateTime}`, success: true, time };
+    }
+    
+    case 'UpdateAppointment': {
+      if (hasError) {
+        return { icon: '❌', text: `Failed to reschedule: ${fc.error}`, success: false, time };
+      }
+      const newDateTime = params.AptDateTime ? formatDateTime(params.AptDateTime) : '';
+      return { icon: '🔄', text: `Appointment Rescheduled${newDateTime ? `: ${newDateTime}` : ''}`, success: true, time };
+    }
+    
+    case 'CancelAppointment': {
+      if (hasError) {
+        return { icon: '❌', text: `Failed to cancel: ${fc.error}`, success: false, time };
+      }
+      return { icon: '🚫', text: 'Appointment Cancelled', success: true, time };
+    }
+    
+    case 'GetMultiplePatients':
+    case 'GetPatientByPhone':
+    case 'SearchPatients': {
+      if (hasError) {
+        return { icon: '❌', text: 'Patient lookup failed', success: false, time };
+      }
+      const patients = Array.isArray(result) ? result : (result ? [result] : []);
+      if (patients.length > 0 && patients[0]?.PatNum) {
+        const patient = patients[0];
+        const name = `${patient.FName || ''} ${patient.LName || ''}`.trim();
+        return { icon: '✅', text: `Patient Found: ${name} (#${patient.PatNum})`, success: true, time };
+      }
+      return { icon: '🔍', text: 'Patient Search: No matches', success: true, time };
+    }
+    
+    case 'GetAvailableSlots': {
+      if (hasError) {
+        return { icon: '❌', text: 'Failed to check availability', success: false, time };
+      }
+      const slots = Array.isArray(result) ? result : (result?.slots || []);
+      const date = params.date || params.startDate || '';
+      return { icon: '📋', text: `Checked Availability: ${date} (${slots.length} slots)`, success: true, time };
+    }
+    
+    case 'GetPatientAppointments': {
+      if (hasError) {
+        return { icon: '❌', text: 'Failed to get appointments', success: false, time };
+      }
+      const appts = Array.isArray(result) ? result : [];
+      return { icon: '📆', text: `Checked Appointments: ${appts.length} found`, success: true, time };
+    }
+    
+    default:
+      return { 
+        icon: hasError ? '❌' : '⚙️', 
+        text: `${fc.functionName}${hasError ? ` (Error: ${fc.error})` : ''}`, 
+        success: !hasError, 
+        time 
+      };
+  }
+}
+
+/**
+ * Format date/time for display
+ */
+function formatDateTime(dateStr: string): string {
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+/**
+ * Format transcript as chat bubbles
+ * Handles formats like "User: text" and "Agent: text"
+ */
+function formatTranscriptAsChat(transcript: string): string {
+  if (!transcript) return '';
+  
+  // Split by double newlines or single newlines with role prefix
+  const lines = transcript.split(/\n\n|\n(?=(?:User|Agent|Assistant):)/gi);
+  
+  return lines.map(line => {
+    const trimmed = line.trim();
+    if (!trimmed) return '';
+    
+    // Check if it's a user message
+    const userMatch = trimmed.match(/^User:\s*(.+)/is);
+    if (userMatch) {
+      return `
+        <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
+          <div style="max-width: 80%; background-color: #3B82F6; color: white; padding: 10px 14px; border-radius: 16px 16px 4px 16px; font-size: 14px; line-height: 1.5;">
+            ${escapeHtml(userMatch[1].trim())}
+          </div>
+        </div>
+      `;
+    }
+    
+    // Check if it's an agent/assistant message
+    const agentMatch = trimmed.match(/^(?:Agent|Assistant):\s*(.+)/is);
+    if (agentMatch) {
+      return `
+        <div style="display: flex; justify-content: flex-start; margin-bottom: 10px;">
+          <div style="max-width: 80%; background-color: #E5E7EB; color: #1F2937; padding: 10px 14px; border-radius: 16px 16px 16px 4px; font-size: 14px; line-height: 1.5;">
+            ${escapeHtml(agentMatch[1].trim())}
+          </div>
+        </div>
+      `;
+    }
+    
+    // Unknown format - show as-is
+    return `
+      <div style="margin-bottom: 10px; padding: 8px; background-color: #F3F4F6; border-radius: 8px; font-size: 13px; color: #4B5563;">
+        ${escapeHtml(trimmed)}
+      </div>
+    `;
+  }).join('');
+}
+
+/**
+ * Escape HTML special characters
+ */
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+/**
  * Generate HTML email for call ended notification
  */
 export function generateCallEndedEmail(data: CallEmailData, dashboardUrl: string): { subject: string; html: string } {
@@ -104,12 +283,14 @@ export function generateCallEndedEmail(data: CallEmailData, dashboardUrl: string
     recordingUrl,
     publicLogUrl,
     startTimestamp,
-    agentName
+    agentName,
+    functionCalls = []
   } = data;
 
   // Debug: Log what we're actually rendering
   console.log('[Email Template] callAnalysis type:', typeof callAnalysis);
   console.log('[Email Template] callAnalysis?.call_summary:', callAnalysis?.call_summary ? 'EXISTS' : 'MISSING');
+  console.log('[Email Template] functionCalls count:', functionCalls.length);
   if (callAnalysis?.call_summary) {
     console.log('[Email Template] call_summary length:', callAnalysis.call_summary.length);
   }
@@ -319,6 +500,29 @@ export function generateCallEndedEmail(data: CallEmailData, dashboardUrl: string
       </div>
     </div>
 
+    ${functionCalls.length > 0 ? `
+    <!-- Actions Taken -->
+    <div class="section">
+      <div class="section-title">📋 Actions Taken (${functionCalls.length})</div>
+      <div style="background-color: #F9FAFB; border-radius: 8px; padding: 12px;">
+        ${functionCalls.map(fc => {
+          const action = formatAction(fc);
+          const bgColor = action.success ? '#ECFDF5' : '#FEF2F2';
+          const borderColor = action.success ? '#10B981' : '#EF4444';
+          return `
+          <div style="display: flex; align-items: flex-start; gap: 10px; padding: 10px; margin-bottom: 8px; background-color: ${bgColor}; border-left: 3px solid ${borderColor}; border-radius: 4px;">
+            <span style="font-size: 18px;">${action.icon}</span>
+            <div style="flex: 1;">
+              <div style="font-size: 14px; color: #374151;">${action.text}</div>
+              <div style="font-size: 11px; color: #9CA3AF; margin-top: 2px;">${action.time}</div>
+            </div>
+          </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+    ` : ''}
+
     ${callAnalysis && (callAnalysis.custom_analysis_data && Object.keys(callAnalysis.custom_analysis_data).length > 0) ? `
     <!-- Extracted Fields & Variables -->
     <div class="section">
@@ -354,7 +558,9 @@ export function generateCallEndedEmail(data: CallEmailData, dashboardUrl: string
     <!-- Full Transcript -->
     <div class="section">
       <div class="section-title">💬 Conversation Transcript</div>
-      <div class="transcript-box">${transcript || transcriptPreview}</div>
+      <div style="background-color: #F9FAFB; border-radius: 8px; padding: 16px; max-height: 500px; overflow-y: auto;">
+        ${transcript ? formatTranscriptAsChat(transcript) : '<div style="color: #6B7280; text-align: center; padding: 20px;">No transcript available</div>'}
+      </div>
     </div>
 
     <!-- Footer -->

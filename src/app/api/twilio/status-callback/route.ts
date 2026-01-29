@@ -180,16 +180,48 @@ async function handleCallCompleted(
     updateData.caller_name = metadata.callerName;
   }
   
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('conversations')
     .update(updateData)
-    .eq('call_sid', callSid)
+    .eq('call_id', callSid)
     .select();
   
   if (error) {
     console.error('[Twilio Status] ❌ Error updating conversation:', error);
   } else if (!data || data.length === 0) {
-    console.warn(`[Twilio Status] ⚠️ No conversation found for call_sid: ${callSid}`);
+    console.warn(`[Twilio Status] ⚠️ No conversation found for call_id: ${callSid}, creating one...`);
+    
+    // Fallback: Create conversation if it wasn't created by WebSocket handler
+    // Look up organization from phone number
+    const { getOrganizationIdFromPhone } = await import('@/app/lib/callHelpers');
+    let organizationId = await getOrganizationIdFromPhone(metadata.to);
+    
+    // Special handling for Twilio web client test calls
+    if (metadata.from?.startsWith('client:') && !metadata.to) {
+      organizationId = 'b445a9c7-af93-4b4a-a975-40d3f44178ec'; // Test org
+    }
+    
+    const insertResult = await supabase
+      .from('conversations')
+      .insert({
+        session_id: `twilio_${callSid}`,
+        organization_id: organizationId,
+        channel: 'voice',  // DB constraint only allows: voice, sms, whatsapp, web
+        call_id: callSid,
+        from_number: metadata.from,
+        to_number: metadata.to,
+        direction: metadata.direction || 'inbound',
+        start_timestamp: Date.now() - (metadata.duration * 1000),
+        ...updateData
+      })
+      .select();
+    
+    if (insertResult.error) {
+      console.error('[Twilio Status] ❌ Error creating conversation:', insertResult.error);
+    } else {
+      data = insertResult.data;
+      console.log(`[Twilio Status] ✅ Created conversation: ${data?.[0]?.id}`);
+    }
   } else {
     console.log(`[Twilio Status] ✅ Updated conversation: ${data[0].id}`);
     

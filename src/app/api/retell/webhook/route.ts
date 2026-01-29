@@ -184,7 +184,7 @@ async function handleCallStarted(call: any) {
       .insert({
         session_id: `retell_${call.call_id}`,
         organization_id: organizationId,
-        channel: 'voice',
+        channel: 'voice',  // DB constraint only allows: voice, sms, whatsapp, web
         
         // Retell fields
         call_id: call.call_id,
