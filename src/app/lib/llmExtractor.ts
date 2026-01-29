@@ -225,8 +225,7 @@ function buildParamsFromState(functionName: string, state: ConversationState): R
         params.dateStart = state.appointment.preferredDate;
         params.dateEnd = state.appointment.preferredDate;
       }
-      params.ProvNum = 1;
-      params.OpNum = 1;
+      // Don't hardcode ProvNum or OpNum - let it search ALL providers and operatories
       break;
       
     case 'CreateAppointment':

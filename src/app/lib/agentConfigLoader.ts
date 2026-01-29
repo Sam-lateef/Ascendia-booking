@@ -37,6 +37,19 @@ export interface DomainPrompts {
   business_rules: string;
 }
 
+export interface TwoAgentInstructions {
+  receptionist: string;
+  supervisor: string;
+  mode: 'two_agent';
+}
+
+export interface OneAgentInstructions {
+  instructions: string;
+  mode: 'one_agent';
+}
+
+export type AgentInstructions = OneAgentInstructions | TwoAgentInstructions;
+
 // Cache for performance (1 minute TTL)
 let workflowsCache: { data: AgentWorkflow[]; timestamp: number } | null = null;
 let rulesCache: { data: BusinessRule[]; timestamp: number } | null = null;
@@ -146,6 +159,91 @@ export async function loadDomainPrompts(): Promise<DomainPrompts> {
 }
 
 /**
+ * Load organization-specific instructions from channel configuration
+ * Falls back to global domain prompts if no org-specific instructions
+ * @param organizationId - Organization UUID
+ * @param channel - Channel name (e.g., 'retell', 'twilio', 'web')
+ */
+export async function loadOrgInstructions(
+  organizationId: string,
+  channel: string = 'retell'
+): Promise<DomainPrompts> {
+  console.log(`[Config Loader] 🔍 Loading instructions for org ${organizationId}, channel: ${channel}`);
+  
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    // Test database connection first
+    const { error: testError } = await supabase.from('channel_configurations').select('id').limit(1);
+    if (testError) {
+      console.error('[Config Loader] ❌ Database connection test failed:', testError);
+      throw testError;
+    }
+    console.log('[Config Loader] ✅ Database connection OK');
+    
+    // Try to load channel-specific instructions first
+    console.log(`[Config Loader] Querying channel_configurations for org ${organizationId}...`);
+    const { data: channelConfig, error: channelError } = await supabase
+      .from('channel_configurations')
+      .select('instructions, one_agent_instructions, receptionist_instructions, supervisor_instructions, enabled, ai_backend, settings')
+      .eq('organization_id', organizationId)
+      .eq('channel', channel)
+      .single();
+
+    if (channelError) {
+      console.log(`[Config Loader] ⚠️ No channel config found (error: ${channelError.message})`);
+    } else {
+      // Determine which instructions field to use based on agent_mode
+      const agentMode = channelConfig?.settings?.agent_mode || 'one_agent';
+      let effectiveInstructions = null;
+      
+      if (agentMode === 'two_agent') {
+        // For two-agent mode, use receptionist instructions
+        effectiveInstructions = channelConfig?.receptionist_instructions;
+      } else {
+        // For one-agent mode, prefer one_agent_instructions, fallback to legacy instructions
+        effectiveInstructions = channelConfig?.one_agent_instructions || channelConfig?.instructions;
+      }
+      
+      console.log(`[Config Loader] Found channel config:`, {
+        agent_mode: agentMode,
+        has_instructions: !!effectiveInstructions,
+        instructions_length: effectiveInstructions?.length || 0,
+        enabled: channelConfig?.enabled,
+        ai_backend: channelConfig?.ai_backend
+      });
+      
+      if (effectiveInstructions) {
+        console.log(`[Config Loader] ✅ Using org-specific instructions (${effectiveInstructions.length} chars, mode: ${agentMode})`);
+        return {
+          persona_prompt: effectiveInstructions,
+          extraction_prompt: '',
+          business_rules: ''
+        };
+      }
+    }
+
+    // Fallback: Load global domain prompts
+    console.log(`[Config Loader] No channel-specific instructions, trying global domain prompts...`);
+    const globalPrompts = await loadDomainPrompts();
+    console.log(`[Config Loader] Global prompts loaded:`, {
+      has_persona: !!globalPrompts.persona_prompt,
+      persona_length: globalPrompts.persona_prompt?.length || 0
+    });
+    return globalPrompts;
+  } catch (err) {
+    console.error('[Config Loader] ❌ Error loading org instructions:', err);
+    console.log('[Config Loader] Attempting fallback to global domain prompts...');
+    try {
+      return await loadDomainPrompts();
+    } catch (fallbackErr) {
+      console.error('[Config Loader] ❌ Fallback also failed:', fallbackErr);
+      return getFallbackPrompts();
+    }
+  }
+}
+
+/**
  * Format workflows as text for LLM instructions
  */
 export function formatWorkflowsAsInstructions(workflows: AgentWorkflow[]): string {
@@ -184,6 +282,67 @@ BUSINESS RULES - CRITICAL CONSTRAINTS
     .join('\n\n');
   
   return header + rulesList;
+}
+
+/**
+ * Load agent instructions based on channel configuration
+ * Returns the appropriate instructions for one-agent or two-agent mode
+ * @param organizationId - Organization UUID
+ * @param channel - Channel name (e.g., 'retell', 'twilio', 'web')
+ */
+export async function loadAgentInstructions(
+  organizationId: string,
+  channel: string = 'retell'
+): Promise<AgentInstructions | null> {
+  console.log(`[Config Loader] 🔍 Loading agent instructions for org ${organizationId}, channel: ${channel}`);
+  
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    const { data: channelConfig, error: channelError } = await supabase
+      .from('channel_configurations')
+      .select('one_agent_instructions, receptionist_instructions, supervisor_instructions, settings')
+      .eq('organization_id', organizationId)
+      .eq('channel', channel)
+      .single();
+
+    if (channelError || !channelConfig) {
+      console.log(`[Config Loader] ⚠️ No channel config found`);
+      return null;
+    }
+
+    const agentMode = channelConfig?.settings?.agent_mode || 'one_agent';
+    
+    if (agentMode === 'two_agent') {
+      if (!channelConfig.receptionist_instructions || !channelConfig.supervisor_instructions) {
+        console.log(`[Config Loader] ⚠️ Two-agent mode configured but instructions missing`);
+        return null;
+      }
+      
+      console.log(`[Config Loader] ✅ Loaded two-agent instructions (receptionist: ${channelConfig.receptionist_instructions.length} chars, supervisor: ${channelConfig.supervisor_instructions.length} chars)`);
+      
+      return {
+        receptionist: channelConfig.receptionist_instructions,
+        supervisor: channelConfig.supervisor_instructions,
+        mode: 'two_agent',
+      };
+    } else {
+      if (!channelConfig.one_agent_instructions) {
+        console.log(`[Config Loader] ⚠️ One-agent mode configured but instructions missing`);
+        return null;
+      }
+      
+      console.log(`[Config Loader] ✅ Loaded one-agent instructions (${channelConfig.one_agent_instructions.length} chars)`);
+      
+      return {
+        instructions: channelConfig.one_agent_instructions,
+        mode: 'one_agent',
+      };
+    }
+  } catch (err) {
+    console.error('[Config Loader] ❌ Error loading agent instructions:', err);
+    return null;
+  }
 }
 
 /**

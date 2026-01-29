@@ -9,10 +9,17 @@ import { db as defaultDb } from '@/app/lib/db';
 /**
  * Get all patients (for admin/dashboard use)
  */
-export async function GetAllPatients(parameters: Record<string, any> = {}, db: any = defaultDb): Promise<any[]> {
-  const { data, error } = await db
+export async function GetAllPatients(parameters: Record<string, any> = {}, db: any = defaultDb, organizationId?: string): Promise<any[]> {
+  let query = db
     .from('patients')
-    .select('*')
+    .select('*');
+  
+  // CRITICAL: Filter by organization for multi-tenancy
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId);
+  }
+  
+  const { data, error } = await query
     .order('last_name')
     .order('first_name');
   
@@ -39,10 +46,15 @@ export async function GetAllPatients(parameters: Record<string, any> = {}, db: a
  * Search for patients by name or phone
  * Matches OpenDental GetMultiplePatients API
  */
-export async function GetMultiplePatients(parameters: Record<string, any>, db: any = defaultDb): Promise<any[]> {
+export async function GetMultiplePatients(parameters: Record<string, any>, db: any = defaultDb, organizationId?: string): Promise<any[]> {
   const { LName, FName, Phone } = parameters;
   
   let query = db.from('patients').select('*');
+  
+  // CRITICAL: Filter by organization for multi-tenancy
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId);
+  }
   
   // Build search filters
   if (LName) {
@@ -59,7 +71,7 @@ export async function GetMultiplePatients(parameters: Record<string, any>, db: a
     query = query.eq('phone', cleanedPhone);
   }
   
-  const { data, error } = await query.order('last_name').order('first_name');
+  const { data, error} = await query.order('last_name').order('first_name');
   
   if (error) {
     throw new Error(`Failed to search patients: ${error.message}`);
@@ -83,7 +95,7 @@ export async function GetMultiplePatients(parameters: Record<string, any>, db: a
 /**
  * Get single patient by ID
  */
-export async function GetPatient(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
+export async function GetPatient(parameters: Record<string, any>, db: any = defaultDb, organizationId?: string): Promise<any> {
   const { PatNum, id } = parameters;
   const patientId = PatNum || id;
   
@@ -91,11 +103,17 @@ export async function GetPatient(parameters: Record<string, any>, db: any = defa
     throw new Error('PatNum or id is required');
   }
   
-  const { data, error } = await db
+  let query = db
     .from('patients')
     .select('*')
-    .eq('id', patientId)
-    .single();
+    .eq('id', patientId);
+  
+  // CRITICAL: Filter by organization for multi-tenancy
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId);
+  }
+  
+  const { data, error } = await query.single();
   
   if (error || !data) {
     throw new Error(`Patient not found: ${error?.message || 'No data returned'}`);
@@ -118,7 +136,7 @@ export async function GetPatient(parameters: Record<string, any>, db: any = defa
  * Required: FName, LName, Birthdate, WirelessPhone
  */
 export async function CreatePatient(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
-  const { FName, LName, Birthdate, WirelessPhone, Email } = parameters || {};
+  const { FName, LName, Birthdate, WirelessPhone, Email, organization_id } = parameters || {};
   
   // Collect all missing required parameters
   const missing: string[] = [];
@@ -171,6 +189,7 @@ export async function CreatePatient(parameters: Record<string, any>, db: any = d
   const { data, error } = await db
     .from('patients')
     .insert({
+      organization_id: organization_id,
       first_name: FName,
       last_name: LName,
       phone: cleanedPhone,
@@ -196,7 +215,7 @@ export async function CreatePatient(parameters: Record<string, any>, db: any = d
 /**
  * Update patient information
  */
-export async function UpdatePatient(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
+export async function UpdatePatient(parameters: Record<string, any>, db: any = defaultDb, organizationId?: string): Promise<any> {
   const { PatNum, id, FName, LName, Birthdate, WirelessPhone, Email } = parameters;
   const patientId = PatNum || id;
   
@@ -222,10 +241,17 @@ export async function UpdatePatient(parameters: Record<string, any>, db: any = d
   }
   if (Email !== undefined) updateData.email = Email || null;
   
-  const { data, error } = await db
+  let query = db
     .from('patients')
     .update(updateData)
-    .eq('id', patientId)
+    .eq('id', patientId);
+  
+  // CRITICAL: Filter by organization for multi-tenancy
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId);
+  }
+  
+  const { data, error } = await query
     .select()
     .single();
   
@@ -246,7 +272,7 @@ export async function UpdatePatient(parameters: Record<string, any>, db: any = d
  * Delete patient
  * Note: This will cascade delete all related appointments
  */
-export async function DeletePatient(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
+export async function DeletePatient(parameters: Record<string, any>, db: any = defaultDb, organizationId?: string): Promise<any> {
   const { PatNum, id } = parameters;
   const patientId = PatNum || id;
   
@@ -255,21 +281,34 @@ export async function DeletePatient(parameters: Record<string, any>, db: any = d
   }
   
   // Validate patient exists
-  const { data: existing, error: fetchError } = await db
+  let existQuery = db
     .from('patients')
     .select('id')
-    .eq('id', patientId)
-    .single();
+    .eq('id', patientId);
+  
+  // CRITICAL: Filter by organization for multi-tenancy
+  if (organizationId) {
+    existQuery = existQuery.eq('organization_id', organizationId);
+  }
+  
+  const { data: existing, error: fetchError } = await existQuery.single();
   
   if (fetchError || !existing) {
     throw new Error(`Patient not found: ${fetchError?.message || 'No data returned'}`);
   }
   
   // Note: Using CASCADE delete, so related appointments will be deleted
-  const { error } = await db
+  let deleteQuery = db
     .from('patients')
     .delete()
     .eq('id', patientId);
+  
+  // CRITICAL: Filter by organization for multi-tenancy (prevents deleting other org's data)
+  if (organizationId) {
+    deleteQuery = deleteQuery.eq('organization_id', organizationId);
+  }
+  
+  const { error } = await deleteQuery;
   
   if (error) {
     throw new Error(`Failed to delete patient: ${error.message}`);

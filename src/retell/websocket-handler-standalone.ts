@@ -4,7 +4,8 @@
 import express from 'express';
 import expressWs from 'express-ws';
 import WebSocket from 'ws';
-import { callGreetingAgent } from '../app/agentConfigs/openDental/greetingAgentSTT';
+// Use embeddedBooking config (internal database) - same as web chat and Twilio
+import { callGreetingAgent } from '../app/agentConfigs/embeddedBooking/greetingAgentSTT';
 
 // Base URL for Next.js API routes
 const NEXTJS_BASE_URL = process.env.NEXTJS_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';

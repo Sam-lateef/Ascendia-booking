@@ -14,6 +14,7 @@
  */
 
 import { db } from './db';
+import { getSupabaseAdmin, getSupabaseWithOrg } from './supabaseClient';
 
 // ============================================
 // TYPES
@@ -800,8 +801,8 @@ export function getAutoFilledParameters(
         params.dateStart = state.appointment.preferredDate;
         params.dateEnd = state.appointment.preferredDate;
       }
-      params.ProvNum = 1;  // Default
-      params.OpNum = 1;    // Default
+      // Don't default ProvNum/OpNum - let GetAvailableSlots search ALL providers/rooms
+      // Patients can choose provider, room will be auto-assigned when booking
       break;
       
     case 'CreateAppointment':
@@ -810,6 +811,15 @@ export function getAutoFilledParameters(
         params.AptDateTime = state.appointment.selectedSlot.dateTime;
         params.ProvNum = state.appointment.selectedSlot.provNum;
         params.Op = state.appointment.selectedSlot.opNum;
+        console.log('[ConversationState] Auto-filling CreateAppointment from selectedSlot:', {
+          AptDateTime: params.AptDateTime,
+          ProvNum: params.ProvNum,
+          Op: params.Op
+        });
+      } else {
+        console.warn('[ConversationState] ⚠️ CreateAppointment called but no selectedSlot in state');
+        // Note: Op will be dynamically fetched in the booking API route
+        // Don't set a default here - let the API fetch the first active operatory
       }
       if (state.appointment.type) params.Note = state.appointment.type;
       break;
@@ -961,6 +971,13 @@ export interface ConversationExport {
     error?: string;
   }>;
   outcome: 'completed' | 'in_progress' | 'abandoned';
+  channel?: 'voice' | 'sms' | 'whatsapp' | 'web';  // Communication channel
+  transcript?: string;  // Full conversation transcript from Retell
+  durationMs?: number;  // Call duration
+  callAnalysis?: any;   // Post-call analysis from Retell
+  recordingUrl?: string;  // Recording URL
+  publicLogUrl?: string;  // Public log URL
+  disconnectionReason?: string;  // Why call ended
 }
 
 export function exportConversation(state: ConversationState): ConversationExport {
@@ -1030,20 +1047,44 @@ export function getConversationsByDateExported(date: string): ConversationExport
  * Get conversations from Supabase for a specific date (async)
  * This includes historical data not in memory
  */
-export async function getConversationsFromSupabase(date: string): Promise<ConversationExport[]> {
+export async function getConversationsFromSupabase(date: string, organizationId?: string): Promise<ConversationExport[]> {
   try {
-    const dbAny = db as any;
-    
     // Query conversations for the date
     const startOfDay = `${date}T00:00:00.000Z`;
     const endOfDay = `${date}T23:59:59.999Z`;
     
-    const { data: conversations, error: convError } = await dbAny
+    console.log(`[ConversationState] Querying for date=${date}, org=${organizationId}, range: ${startOfDay} to ${endOfDay}`);
+    
+    // Use getSupabaseWithOrg for defense-in-depth security:
+    // Sets RLS context so all queries are automatically filtered by org
+    // Even if we forget manual filter, RLS protects us!
+    const dbAny = organizationId 
+      ? await getSupabaseWithOrg(organizationId) as any
+      : getSupabaseAdmin() as any;
+    
+    let query = dbAny
       .from('conversations')
       .select('*')
       .gte('created_at', startOfDay)
-      .lte('created_at', endOfDay)
+      .lte('created_at', endOfDay);
+    
+    // Manual filter as additional safety (redundant with RLS but explicit is good)
+    if (organizationId) {
+      query = query.eq('organization_id', organizationId);
+    }
+    
+    const { data: conversations, error: convError } = await query
       .order('created_at', { ascending: false });
+    
+    console.log(`[ConversationState] Query returned ${conversations?.length || 0} conversations`);
+    if (conversations && conversations.length > 0) {
+      console.log('[ConversationState] First conversation:', {
+        id: conversations[0].id,
+        call_id: conversations[0].call_id,
+        created_at: conversations[0].created_at,
+        organization_id: conversations[0].organization_id
+      });
+    }
     
     if (convError || !conversations) {
       console.error('[ConversationState] Error fetching from Supabase:', convError);
@@ -1125,6 +1166,13 @@ export async function getConversationsFromSupabase(date: string): Promise<Conver
           };
         }),
         outcome,
+        channel: conv.channel || undefined,
+        transcript: conv.transcript || undefined,
+        durationMs: conv.duration_ms || undefined,
+        callAnalysis: conv.call_analysis || undefined,
+        recordingUrl: conv.recording_url || undefined,
+        publicLogUrl: conv.public_log_url || undefined,
+        disconnectionReason: conv.disconnection_reason || undefined,
       });
     }
     
@@ -1150,13 +1198,23 @@ export async function getConversationsFromSupabase(date: string): Promise<Conver
 /**
  * Get all conversations from Supabase (async)
  */
-export async function getAllConversationsFromSupabase(): Promise<ConversationExport[]> {
+export async function getAllConversationsFromSupabase(organizationId?: string): Promise<ConversationExport[]> {
   try {
-    const dbAny = db as any;
+    // Use getSupabaseWithOrg for defense-in-depth security
+    const dbAny = organizationId 
+      ? await getSupabaseWithOrg(organizationId) as any
+      : getSupabaseAdmin() as any;
     
-    const { data: conversations, error } = await dbAny
+    let query = dbAny
       .from('conversations')
-      .select('*')
+      .select('*');
+    
+    // Manual filter as additional safety (redundant with RLS but explicit is good)
+    if (organizationId) {
+      query = query.eq('organization_id', organizationId);
+    }
+    
+    const { data: conversations, error } = await query
       .order('created_at', { ascending: false })
       .limit(100); // Limit for performance
     
@@ -1234,6 +1292,13 @@ export async function getAllConversationsFromSupabase(): Promise<ConversationExp
           };
         }),
         outcome,
+        channel: conv.channel || undefined,
+        transcript: conv.transcript || undefined,
+        durationMs: conv.duration_ms || undefined,
+        callAnalysis: conv.call_analysis || undefined,
+        recordingUrl: conv.recording_url || undefined,
+        publicLogUrl: conv.public_log_url || undefined,
+        disconnectionReason: conv.disconnection_reason || undefined,
       });
     }
     

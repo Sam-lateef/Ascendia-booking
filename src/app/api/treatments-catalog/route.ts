@@ -81,6 +81,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const { data, error } = await db
       .from('treatments_catalog')
       .insert({
+        organization_id: context.organizationId,
         code: body.code,
         name: body.name,
         category: body.category,
@@ -149,6 +150,7 @@ export async function PUT(request: NextRequest): Promise<NextResponse> {
         description: body.description,
       })
       .eq('id', body.id)
+      .eq('organization_id', context.organizationId) // CRITICAL: Prevent updating other org's data
       .select()
       .single();
 
@@ -193,7 +195,8 @@ export async function DELETE(request: NextRequest): Promise<NextResponse> {
     const { error } = await db
       .from('treatments_catalog')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .eq('organization_id', context.organizationId); // CRITICAL: Prevent deleting other org's data
 
     if (error) {
       console.error('Error deleting treatment:', error);

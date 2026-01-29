@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Phone } from 'lucide-react';
 import { useTranslations, useLocale } from '@/lib/i18n/TranslationProvider';
+import { bookingRequest } from '@/app/lib/apiClient';
 
 interface DashboardStats {
   todayAppointments: number;
@@ -73,37 +74,13 @@ export default function AdminDashboard() {
     try {
       // Fetch today's appointments
       const today = new Date().toISOString().split('T')[0];
-      const appointmentsRes = await fetch('/api/booking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          functionName: 'GetAppointments',
-          parameters: { DateStart: today, DateEnd: today },
-        }),
-      });
-      const appointmentsData = await appointmentsRes.json();
+      const appointmentsData = await bookingRequest('GetAppointments', { DateStart: today, DateEnd: today });
 
       // Fetch providers
-      const providersRes = await fetch('/api/booking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          functionName: 'GetProviders',
-          parameters: {},
-        }),
-      });
-      const providersData = await providersRes.json();
+      const providersData = await bookingRequest('GetProviders', {});
 
       // Fetch operatories
-      const operatoriesRes = await fetch('/api/booking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          functionName: 'GetOperatories',
-          parameters: {},
-        }),
-      });
-      const operatoriesData = await operatoriesRes.json();
+      const operatoriesData = await bookingRequest('GetOperatories', {});
 
       setStats({
         todayAppointments: Array.isArray(appointmentsData) ? appointmentsData.length : 0,
@@ -129,15 +106,7 @@ export default function AdminDashboard() {
   const fetchAppointmentsForDate = useCallback(async (date: string) => {
     setSummaryLoading(true);
     try {
-      const res = await fetch('/api/booking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          functionName: 'GetAppointments',
-          parameters: { DateStart: date, DateEnd: date },
-        }),
-      });
-      const data = await res.json();
+      const data = await bookingRequest('GetAppointments', { DateStart: date, DateEnd: date });
       const appointmentsData = Array.isArray(data) ? data : [];
       setAppointments(appointmentsData);
       
@@ -149,15 +118,7 @@ export default function AdminDashboard() {
         await Promise.all(
           patientNums.map(async (patNum) => {
             try {
-              const patRes = await fetch('/api/booking', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  functionName: 'GetPatient',
-                  parameters: { PatNum: patNum },
-                }),
-              });
-              const patData = await patRes.json();
+              const patData = await bookingRequest('GetPatient', { PatNum: patNum });
               if (patData && !patData.error) {
                 patientMap.set(patNum, patData);
               }

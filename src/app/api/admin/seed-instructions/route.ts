@@ -5,13 +5,11 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentOrganization } from '@/app/lib/apiHelpers';
-import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAdmin } from '@/app/lib/supabaseClient';
 import { supervisorInstructions } from '@/app/agentConfigs/embeddedBooking/supervisorAgent';
 import { generateLexiInstructions } from '@/app/agentConfigs/embeddedBooking/lexiAgentTwilio';
 import { dentalOfficeInfo } from '@/app/agentConfigs/openDental/dentalOfficeData';
 
-const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 const SYSTEM_AGENT_ID = 'lexi-twilio';
 
 // Receptionist instructions (from websocket-handler-standard.ts)
@@ -387,10 +385,11 @@ export async function POST(request: NextRequest) {
       }, { status: 500 });
     }
 
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    const supabase = getSupabaseAdmin();
     
-    // Generate premium instructions
+    // Generate instructions from current hardcoded versions
     const premiumInstructions = generateLexiInstructions(true);
+    const whatsappInstructions = generateLexiInstructions(false); // Text-based version for WhatsApp
     
     console.log('[Seed] Upserting instructions to database...');
     
@@ -409,6 +408,7 @@ export async function POST(request: NextRequest) {
         manual_ai_instructions: premiumInstructions,
         receptionist_instructions: receptionistInstructions,
         supervisor_instructions: supervisorInstructions,
+        whatsapp_instructions: whatsappInstructions,
         voice: 'sage',
         created_by: '00000000-0000-0000-0000-000000000000',
         updated_at: new Date().toISOString()
@@ -432,7 +432,8 @@ export async function POST(request: NextRequest) {
       instructionsLength: {
         premium: premiumInstructions.length,
         receptionist: receptionistInstructions.length,
-        supervisor: supervisorInstructions.length
+        supervisor: supervisorInstructions.length,
+        whatsapp: whatsappInstructions.length
       }
     });
   } catch (error: unknown) {

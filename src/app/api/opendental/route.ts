@@ -337,9 +337,9 @@ export async function POST(req: NextRequest) {
         }
       }
       
-      // Add defaults for required fields
-      if (!filtered.Op) filtered.Op = 1;
-      if (!filtered.ProvNum) filtered.ProvNum = 1;
+      // Don't add hardcoded defaults - let booking API handle dynamic assignment per org
+      // Op will be dynamically fetched in booking/route.ts
+      // ProvNum should come from the selected slot
       
       // Convert PatNum to number if it's a string
       if (filtered.PatNum && typeof filtered.PatNum === 'string') {

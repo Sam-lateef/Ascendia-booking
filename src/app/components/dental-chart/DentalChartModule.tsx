@@ -4,6 +4,7 @@ import React from 'react';
 import { ToothChart } from './ToothChart';
 import { SurfaceSelector } from './SurfaceSelector';
 import { SelectedTreatmentsList } from './SelectedTreatmentsList';
+import { TreatmentCatalogBrowser } from './TreatmentCatalogBrowser';
 import { useDentalChartStore } from './dentalChartStore';
 import { TreatmentPlan, TreatmentPlanItem } from './types';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ interface DentalChartModuleProps {
   patientName?: string;
   onSave?: (treatmentPlan: TreatmentPlan) => void;
   className?: string;
+  hideDentalFeatures?: boolean; // Hide tooth chart and surface selector for non-dental businesses
 }
 
 export const DentalChartModule: React.FC<DentalChartModuleProps> = ({
@@ -20,6 +22,7 @@ export const DentalChartModule: React.FC<DentalChartModuleProps> = ({
   patientName,
   onSave,
   className = '',
+  hideDentalFeatures = false,
 }) => {
   const { chartedTreatments, clearAll } = useDentalChartStore();
 
@@ -65,10 +68,12 @@ export const DentalChartModule: React.FC<DentalChartModuleProps> = ({
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold text-gray-900">
-              Dental Chart
+              {hideDentalFeatures ? 'Treatment Plan' : 'Dental Chart'}
             </h1>
             {patientName && (
-              <p className="text-sm text-gray-500">Patient: {patientName}</p>
+              <p className="text-sm text-gray-500">
+                {hideDentalFeatures ? 'Client' : 'Patient'}: {patientName}
+              </p>
             )}
           </div>
           <div className="flex items-center gap-3">
@@ -91,27 +96,33 @@ export const DentalChartModule: React.FC<DentalChartModuleProps> = ({
 
       {/* Main content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left: Tooth chart */}
+        <div className={`grid grid-cols-1 lg:grid-cols-2 gap-8`}>
+          {/* Left: Tooth chart (dental mode) OR Service catalog (non-dental mode) */}
           <div className="bg-white rounded-xl shadow-sm border p-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Tooth Selection
-            </h2>
-            <p className="text-sm text-gray-500 mb-6">
-              Select a tooth to add a treatment
-            </p>
-            <ToothChart />
+            {hideDentalFeatures ? (
+              <TreatmentCatalogBrowser />
+            ) : (
+              <>
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">
+                  Tooth Selection
+                </h2>
+                <p className="text-sm text-gray-500 mb-6">
+                  Select a tooth to add a treatment
+                </p>
+                <ToothChart />
+              </>
+            )}
           </div>
 
           {/* Right: Treatment list */}
           <div className="bg-white rounded-xl shadow-sm border p-6">
-            <SelectedTreatmentsList />
+            <SelectedTreatmentsList hideDentalFeatures={hideDentalFeatures} />
           </div>
         </div>
       </div>
 
-      {/* Surface selector modal */}
-      <SurfaceSelector />
+      {/* Surface selector modal - Only show in dental mode */}
+      {!hideDentalFeatures && <SurfaceSelector />}
     </div>
   );
 };

@@ -13,10 +13,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Lock, Unlock, Eye, EyeOff, ExternalLink } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Lock, Unlock, Eye, EyeOff, ExternalLink, Phone, MessageSquare, Globe, Key, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { useTranslations, useLocale } from '@/lib/i18n/TranslationProvider';
+import { useRouter } from 'next/navigation';
 
 type AgentMode = 'premium' | 'standard';
+type Channel = 'twilio' | 'web' | 'whatsapp';
 
 const HARDCODED_PASSWORD = 'lexi2026'; // Change this to your preferred password
 
@@ -24,10 +27,21 @@ export default function SettingsPage() {
   const t = useTranslations('settings');
   const tCommon = useTranslations('common');
   const locale = useLocale();
+  const router = useRouter();
   const [mode, setMode] = useState<AgentMode>('standard');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  
+  // Organization settings
+  const [dentalMode, setDentalMode] = useState(true);
+  const [orgSettingsLoading, setOrgSettingsLoading] = useState(false);
+  
+  // API credentials status
+  const [credentialsStatus, setCredentialsStatus] = useState<Record<string, boolean>>({});
+  
+  // Channel selection
+  const [activeChannel, setActiveChannel] = useState<Channel>('twilio');
   
   // Password protection for instructions
   const [isUnlocked, setIsUnlocked] = useState(false);
@@ -39,11 +53,14 @@ export default function SettingsPage() {
   const [premiumInstructions, setPremiumInstructions] = useState('');
   const [receptionistInstructions, setReceptionistInstructions] = useState('');
   const [supervisorInstructions, setSupervisorInstructions] = useState('');
+  const [whatsappInstructions, setWhatsappInstructions] = useState('');
   const [instructionsLoading, setInstructionsLoading] = useState(false);
   const [seeding, setSeeding] = useState(false);
 
   useEffect(() => {
     fetchCurrentMode();
+    fetchCredentialsStatus();
+    fetchOrganizationSettings();
   }, []);
 
   useEffect(() => {
@@ -51,6 +68,68 @@ export default function SettingsPage() {
       fetchInstructions();
     }
   }, [isUnlocked]);
+
+  const fetchCredentialsStatus = async () => {
+    try {
+      const response = await fetch('/api/admin/api-credentials/status');
+      const data = await response.json();
+      
+      if (data.success) {
+        setCredentialsStatus(data.status || {});
+      }
+    } catch (error) {
+      console.error('Error fetching credentials status:', error);
+    }
+  };
+
+  const fetchOrganizationSettings = async () => {
+    try {
+      const response = await fetch('/api/admin/organization-settings');
+      const data = await response.json();
+      
+      if (data.success && data.settings) {
+        setDentalMode(data.settings.dental_mode ?? true);
+      }
+    } catch (error) {
+      console.error('Error fetching organization settings:', error);
+    }
+  };
+
+  const handleSaveOrganizationSettings = async () => {
+    setOrgSettingsLoading(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch('/api/admin/organization-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dental_mode: dentalMode,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setMessage({ 
+          type: 'success', 
+          text: '✅ Organization settings saved successfully'
+        });
+      } else {
+        setMessage({ 
+          type: 'error', 
+          text: `❌ Failed to save: ${data.error}`
+        });
+      }
+    } catch (error) {
+      setMessage({ 
+        type: 'error', 
+        text: '❌ Failed to save organization settings'
+      });
+    } finally {
+      setOrgSettingsLoading(false);
+    }
+  };
 
   const fetchCurrentMode = async () => {
     setLoading(true);
@@ -78,6 +157,7 @@ export default function SettingsPage() {
         setPremiumInstructions(data.premiumInstructions || '');
         setReceptionistInstructions(data.receptionistInstructions || '');
         setSupervisorInstructions(data.supervisorInstructions || '');
+        setWhatsappInstructions(data.whatsappInstructions || '');
       }
     } catch (error) {
       console.error('Error fetching instructions:', error);
@@ -180,6 +260,8 @@ export default function SettingsPage() {
           premiumInstructions,
           receptionistInstructions,
           supervisorInstructions,
+          whatsappInstructions,
+          channel: activeChannel,
         }),
       });
 
@@ -218,6 +300,74 @@ export default function SettingsPage() {
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">{t('title')}</h1>
+
+      {message && (
+        <div className={`p-4 rounded-lg border ${
+          message.type === 'success' 
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : 'bg-red-50 border-red-200 text-red-800'
+        }`}>
+          {message.text}
+        </div>
+      )}
+
+      {/* Organization Settings - Industry Type */}
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle>Organization Settings</CardTitle>
+          <CardDescription>
+            Configure your organization type and industry-specific features
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div className="space-y-1">
+              <Label htmlFor="dental-mode" className="text-base font-medium">
+                Dental Mode
+              </Label>
+              <p className="text-sm text-gray-600">
+                Enable dental-specific features like tooth charts and tooth selection in treatment plans. 
+                Disable this for salons, spas, or other non-dental businesses.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                id="dental-mode"
+                onClick={() => setDentalMode(!dentalMode)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  dentalMode ? 'bg-blue-600' : 'bg-gray-200'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    dentalMode ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+              <span className="text-sm font-medium text-gray-700">
+                {dentalMode ? 'Enabled' : 'Disabled'}
+              </span>
+            </div>
+          </div>
+
+          {!dentalMode && (
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> With dental mode disabled, tooth charts and tooth selection 
+                will be hidden throughout the system. Treatment plans will work for general services 
+                like salon treatments, spa services, or any other non-dental business.
+              </p>
+            </div>
+          )}
+
+          <Button 
+            onClick={handleSaveOrganizationSettings}
+            disabled={orgSettingsLoading}
+          >
+            {orgSettingsLoading ? 'Saving...' : 'Save Organization Settings'}
+          </Button>
+        </CardContent>
+      </Card>
 
       {/* Agent Mode Card */}
       <Card className="max-w-2xl">
@@ -287,6 +437,57 @@ export default function SettingsPage() {
                 {message.text}
               </div>
             )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* API Configuration Card */}
+      <Card className="max-w-2xl">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Key className="w-5 h-5" />
+            API Configuration
+          </CardTitle>
+          <CardDescription>
+            Manage API credentials for Twilio, OpenAI, WhatsApp, and other services
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {/* Credentials Status */}
+          <div className="grid grid-cols-2 gap-3">
+            {['openai', 'twilio', 'evolution_api', 'opendental'].map(type => {
+              const isConfigured = credentialsStatus[type];
+              return (
+                <div key={type} className="flex items-center gap-2 p-2 rounded bg-gray-50">
+                  {isConfigured ? (
+                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  ) : (
+                    <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                  )}
+                  <span className="text-sm font-medium">
+                    {type === 'openai' ? 'OpenAI' : 
+                     type === 'twilio' ? 'Twilio' : 
+                     type === 'evolution_api' ? 'WhatsApp' : 
+                     'OpenDental'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <Button 
+            onClick={() => router.push('/admin/booking/api-keys')}
+            className="bg-blue-600 hover:bg-blue-700 text-white w-full"
+          >
+            <Key className="w-4 h-4 mr-2" />
+            Manage API Keys
+          </Button>
+
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <p className="text-xs text-blue-800">
+              💡 Configure organization-specific API keys for multi-tenant support. 
+              Falls back to environment variables if not configured.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -383,60 +584,168 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  {/* Premium Instructions */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label htmlFor="premium-instructions" className="text-base font-semibold">
-                        Premium Configuration
-                      </Label>
-                      <span className="text-xs text-gray-500 bg-purple-100 px-2 py-1 rounded">{tCommon('single_agent')}</span>
-                    </div>
-                    <Textarea
-                      id="premium-instructions"
-                      value={premiumInstructions}
-                      onChange={(e) => setPremiumInstructions(e.target.value)}
-                      placeholder={tCommon('configuration')}
-                      className="min-h-[200px] font-mono text-sm"
-                    />
-                  </div>
+                  {/* Channel Tabs */}
+                  <Tabs value={activeChannel} onValueChange={(v) => setActiveChannel(v as Channel)}>
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="twilio" className="flex items-center gap-2">
+                        <Phone className="w-4 h-4" />
+                        <span>Twilio Voice</span>
+                      </TabsTrigger>
+                      <TabsTrigger value="web" className="flex items-center gap-2">
+                        <Globe className="w-4 h-4" />
+                        <span>Web Agent</span>
+                      </TabsTrigger>
+                      <TabsTrigger value="whatsapp" className="flex items-center gap-2">
+                        <MessageSquare className="w-4 h-4" />
+                        <span>WhatsApp</span>
+                      </TabsTrigger>
+                    </TabsList>
 
-                  <div className="border-t pt-6" />
+                    {/* Twilio Voice Tab */}
+                    <TabsContent value="twilio" className="space-y-6 mt-6">
+                      {/* Premium Instructions */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="premium-instructions" className="text-base font-semibold">
+                            Premium Configuration
+                          </Label>
+                          <span className="text-xs text-gray-500 bg-purple-100 px-2 py-1 rounded">Single Agent</span>
+                        </div>
+                        <Textarea
+                          id="premium-instructions"
+                          value={premiumInstructions}
+                          onChange={(e) => setPremiumInstructions(e.target.value)}
+                          placeholder="Premium agent instructions (gpt-4o-realtime)"
+                          className="min-h-[200px] font-mono text-sm"
+                        />
+                      </div>
 
-                  {/* Standard Mode Instructions */}
-                  <div className="space-y-6">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-base font-semibold">{tCommon('standard_configuration')}</h3>
-                      <span className="text-xs text-gray-500 bg-blue-100 px-2 py-1 rounded">{tCommon('twoagent_system')}</span>
-                    </div>
+                      <div className="border-t pt-6" />
 
-                    {/* Receptionist Instructions */}
-                    <div className="space-y-3">
-                      <Label htmlFor="receptionist-instructions" className="text-sm font-medium">
-                        Agent A
-                      </Label>
-                      <Textarea
-                        id="receptionist-instructions"
-                        value={receptionistInstructions}
-                        onChange={(e) => setReceptionistInstructions(e.target.value)}
-                        placeholder={tCommon('configuration')}
-                        className="min-h-[200px] font-mono text-sm"
-                      />
-                    </div>
+                      {/* Standard Mode Instructions */}
+                      <div className="space-y-6">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-base font-semibold">Standard Configuration</h3>
+                          <span className="text-xs text-gray-500 bg-blue-100 px-2 py-1 rounded">Two-Agent System</span>
+                        </div>
 
-                    {/* Supervisor Instructions */}
-                    <div className="space-y-3">
-                      <Label htmlFor="supervisor-instructions" className="text-sm font-medium">
-                        Agent B
-                      </Label>
-                      <Textarea
-                        id="supervisor-instructions"
-                        value={supervisorInstructions}
-                        onChange={(e) => setSupervisorInstructions(e.target.value)}
-                        placeholder={tCommon('configuration')}
-                        className="min-h-[200px] font-mono text-sm"
-                      />
-                    </div>
-                  </div>
+                        {/* Receptionist Instructions */}
+                        <div className="space-y-3">
+                          <Label htmlFor="receptionist-instructions" className="text-sm font-medium">
+                            Receptionist Agent (gpt-4o-mini)
+                          </Label>
+                          <Textarea
+                            id="receptionist-instructions"
+                            value={receptionistInstructions}
+                            onChange={(e) => setReceptionistInstructions(e.target.value)}
+                            placeholder="Receptionist agent instructions"
+                            className="min-h-[200px] font-mono text-sm"
+                          />
+                        </div>
+
+                        {/* Supervisor Instructions */}
+                        <div className="space-y-3">
+                          <Label htmlFor="supervisor-instructions" className="text-sm font-medium">
+                            Supervisor Agent (gpt-4o)
+                          </Label>
+                          <Textarea
+                            id="supervisor-instructions"
+                            value={supervisorInstructions}
+                            onChange={(e) => setSupervisorInstructions(e.target.value)}
+                            placeholder="Supervisor agent instructions"
+                            className="min-h-[200px] font-mono text-sm"
+                          />
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    {/* Web Agent Tab */}
+                    <TabsContent value="web" className="space-y-6 mt-6">
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+                        <p className="text-sm text-purple-800">
+                          Web agent supports both Premium (single-agent) and Standard (two-agent) modes, same as Twilio Voice. 
+                          The mode selector above controls which configuration is used.
+                        </p>
+                      </div>
+                      
+                      {/* Premium Instructions */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="web-premium-instructions" className="text-base font-semibold">
+                            Premium Configuration
+                          </Label>
+                          <span className="text-xs text-gray-500 bg-purple-100 px-2 py-1 rounded">Single Agent</span>
+                        </div>
+                        <Textarea
+                          id="web-premium-instructions"
+                          value={premiumInstructions}
+                          onChange={(e) => setPremiumInstructions(e.target.value)}
+                          placeholder="Web agent premium instructions (gpt-4o)"
+                          className="min-h-[200px] font-mono text-sm"
+                        />
+                      </div>
+
+                      <div className="border-t pt-6" />
+
+                      {/* Standard Mode Instructions */}
+                      <div className="space-y-6">
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-base font-semibold">Standard Configuration</h3>
+                          <span className="text-xs text-gray-500 bg-blue-100 px-2 py-1 rounded">Two-Agent System</span>
+                        </div>
+
+                        {/* Receptionist Instructions */}
+                        <div className="space-y-3">
+                          <Label htmlFor="web-receptionist-instructions" className="text-sm font-medium">
+                            Receptionist Agent (gpt-4o-mini)
+                          </Label>
+                          <Textarea
+                            id="web-receptionist-instructions"
+                            value={receptionistInstructions}
+                            onChange={(e) => setReceptionistInstructions(e.target.value)}
+                            placeholder="Web receptionist agent instructions"
+                            className="min-h-[200px] font-mono text-sm"
+                          />
+                        </div>
+
+                        {/* Supervisor Instructions */}
+                        <div className="space-y-3">
+                          <Label htmlFor="web-supervisor-instructions" className="text-sm font-medium">
+                            Supervisor Agent (gpt-4o)
+                          </Label>
+                          <Textarea
+                            id="web-supervisor-instructions"
+                            value={supervisorInstructions}
+                            onChange={(e) => setSupervisorInstructions(e.target.value)}
+                            placeholder="Web supervisor agent instructions"
+                            className="min-h-[200px] font-mono text-sm"
+                          />
+                        </div>
+                      </div>
+                    </TabsContent>
+
+                    {/* WhatsApp Tab */}
+                    <TabsContent value="whatsapp" className="space-y-6 mt-6">
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                        <p className="text-sm text-green-800">
+                          <strong>WhatsApp Configuration:</strong> Uses gpt-4o (single-agent, text-only). 
+                          Similar to Premium mode but optimized for text messaging.
+                        </p>
+                      </div>
+                      <div className="space-y-3">
+                        <Label htmlFor="whatsapp-instructions" className="text-base font-semibold">
+                          WhatsApp Agent Instructions
+                        </Label>
+                        <Textarea
+                          id="whatsapp-instructions"
+                          value={whatsappInstructions}
+                          onChange={(e) => setWhatsappInstructions(e.target.value)}
+                          placeholder="WhatsApp agent instructions (gpt-4o, text-based)"
+                          className="min-h-[400px] font-mono text-sm"
+                        />
+                      </div>
+                    </TabsContent>
+                  </Tabs>
 
                   <div className="border-t pt-6" />
 
@@ -465,7 +774,7 @@ export default function SettingsPage() {
 
                   <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                     <p className="text-sm text-blue-800">
-                      💡 <strong>{tCommon('tip')}</strong> Changes take effect immediately for new calls.
+                      💡 <strong>{tCommon('tip')}</strong> Changes take effect immediately for new calls/messages.
                     </p>
                   </div>
                 </>

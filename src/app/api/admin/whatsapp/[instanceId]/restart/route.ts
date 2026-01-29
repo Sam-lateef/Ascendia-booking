@@ -3,7 +3,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/app/lib/supabase';
+import { getSupabaseAdmin } from '@/app/lib/supabaseClient';
 import { getEvolutionClient } from '@/app/lib/evolution/EvolutionClient';
 
 export async function POST(

@@ -140,26 +140,14 @@ export function useRealtimeSession(callbacks: RealtimeSessionCallbacks = {}) {
         ? 'gpt-4o-mini-realtime-preview-2024-12-17' // Standard: cost-optimized
         : 'gpt-4o-realtime-preview-2025-06-03';      // Premium: full featured
 
-      // Load database instructions for Standard mode
+      // NOTE: Instructions are now loaded from channel configurations in AgentUIApp
+      // No need to override them here - they come pre-configured from the database
       if (isStandardMode) {
         console.log('[RealtimeSession] Using Standard mode (cost-optimized)');
-        
-        try {
-          // Dynamic import to avoid issues with server-side rendering
-          const { loadInstructionsFromDB } = await import('../agentConfigs/embeddedBooking/lexiStandardAgent');
-          const dbInstructions = await loadInstructionsFromDB();
-          
-          if (dbInstructions.useManual && dbInstructions.receptionist) {
-            // Update the root agent's instructions with DB version
-            rootAgent.instructions = dbInstructions.receptionist;
-            console.log('[RealtimeSession] Applied database instructions');
-          }
-        } catch (error) {
-          console.warn('[RealtimeSession] Could not load DB instructions:', error);
-        }
       } else {
         console.log('[RealtimeSession] Using Premium mode');
       }
+      console.log('[RealtimeSession] Using instructions from initialAgents (already loaded from DB)');
 
       sessionRef.current = new RealtimeSession(rootAgent, {
         transport: new OpenAIRealtimeWebRTC({

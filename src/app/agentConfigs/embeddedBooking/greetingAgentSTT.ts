@@ -1,66 +1,108 @@
 import { fetchEmbeddedBookingContext } from '@/app/lib/embeddedBookingContext';
 import { dentalOfficeInfo } from '../openDental/dentalOfficeData';
-import { loadDomainPrompts } from '@/app/lib/agentConfigLoader';
+import { loadOrgInstructions } from '@/app/lib/agentConfigLoader';
 import { executeOrchestrator } from './orchestratorAgent';
 
 // ============================================
-// DATABASE CONFIGURATION CACHE (Lexi)
+// PER-ORGANIZATION INSTRUCTION CACHE
 // ============================================
-let lexiPersonaPrompt: string | null = null;
-let lexiConfigLoaded = false;
-
-// Preload Lexi's persona from database (async, runs in background)
-// Only run on server-side (not in browser)
-if (typeof window === 'undefined') {
-  (async () => {
-    try {
-      const prompts = await loadDomainPrompts();
-      if (prompts.persona_prompt && prompts.persona_prompt.trim()) {
-        lexiPersonaPrompt = prompts.persona_prompt;
-        lexiConfigLoaded = true;
-        console.log('[Lexi] ✅ Persona prompt loaded from database');
-      }
-    } catch (error) {
-      console.warn('[Lexi] ⚠️ Could not load persona from database, using hardcoded fallback');
-    }
-  })();
+interface OrgInstructionCache {
+  instructions: string;
+  timestamp: number;
 }
+
+const orgInstructionCache = new Map<string, OrgInstructionCache>();
+const INSTRUCTION_CACHE_TTL = 60000; // 1 minute
 
 
 // Type for callback to play "one moment" audio (client-side only)
 export type PlayOneMomentCallback = () => Promise<void>;
 
 /**
- * Generate greeting agent instructions (optimized static version)
- * @param forRealtime - If true, adapts instructions for OpenAI Realtime SDK (which handles first message automatically)
+ * Load instructions from database for specific organization
+ * @param organizationId - Organization UUID
+ * @param channel - Channel name (defaults to 'retell')
+ * @returns Promise<string> - Instructions text
  */
-export function generateGreetingAgentInstructions(forRealtime: boolean = false): string {
-  // ✅ NEW: Use database persona if loaded
-  if (lexiConfigLoaded && lexiPersonaPrompt) {
-    console.log('[Lexi] Using database-configured persona');
-    
-    const officeInfoTemplate = `OFFICE INFO
+async function loadInstructionsFromDB(
+  organizationId?: string,
+  channel: string = 'retell'
+): Promise<string | null> {
+  if (!organizationId) {
+    console.log('[Lexi] ⚠️ No organization ID provided, using fallback');
+    return null;
+  }
+
+  console.log(`[Lexi] 🔍 Attempting to load instructions for org: ${organizationId}, channel: ${channel}`);
+
+  // Check cache first
+  const cacheKey = `${organizationId}:${channel}`;
+  const cached = orgInstructionCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < INSTRUCTION_CACHE_TTL) {
+    console.log(`[Lexi] ✅ Using cached instructions for org ${organizationId} (${cached.instructions.length} chars)`);
+    return cached.instructions;
+  }
+
+  try {
+    const prompts = await loadOrgInstructions(organizationId, channel);
+    if (prompts.persona_prompt && prompts.persona_prompt.trim()) {
+      console.log(`[Lexi] 📝 Received persona prompt (${prompts.persona_prompt.length} chars)`);
+      
+      const officeInfoTemplate = `OFFICE INFO
 ${dentalOfficeInfo.name} | ${dentalOfficeInfo.phone} | ${dentalOfficeInfo.address}
 Hours: ${dentalOfficeInfo.hours.weekdays} | Weekends: ${dentalOfficeInfo.hours.saturday}
 Services: ${dentalOfficeInfo.services.join(', ')}`;
 
-    // Inject office info into the persona prompt
-    // Template variables from domains table: {persona_name}, {persona_role}, {company_name}
-    const personalizedPrompt = lexiPersonaPrompt
-      .replace(/{persona_name}/g, 'Lexi')
-      .replace(/{persona_role}/g, 'receptionist')
-      .replace(/{company_name}/g, dentalOfficeInfo.name)
-      .replace(/{OFFICE_NAME}/g, dentalOfficeInfo.name)
-      .replace(/{OFFICE_PHONE}/g, dentalOfficeInfo.phone)
-      .replace(/{OFFICE_ADDRESS}/g, dentalOfficeInfo.address)
-      .replace(/{OFFICE_HOURS_WEEKDAYS}/g, dentalOfficeInfo.hours.weekdays)
-      .replace(/{OFFICE_HOURS_SATURDAY}/g, dentalOfficeInfo.hours.saturday)
-      .replace(/{OFFICE_SERVICES}/g, dentalOfficeInfo.services.join(', '));
-    
-    return `${personalizedPrompt}\n\n${officeInfoTemplate}`;
+      // Inject office info into the persona prompt
+      const personalizedPrompt = prompts.persona_prompt
+        .replace(/{persona_name}/g, 'Lexi')
+        .replace(/{persona_role}/g, 'receptionist')
+        .replace(/{company_name}/g, dentalOfficeInfo.name)
+        .replace(/{OFFICE_NAME}/g, dentalOfficeInfo.name)
+        .replace(/{OFFICE_PHONE}/g, dentalOfficeInfo.phone)
+        .replace(/{OFFICE_ADDRESS}/g, dentalOfficeInfo.address)
+        .replace(/{OFFICE_HOURS_WEEKDAYS}/g, dentalOfficeInfo.hours.weekdays)
+        .replace(/{OFFICE_HOURS_SATURDAY}/g, dentalOfficeInfo.hours.saturday)
+        .replace(/{OFFICE_SERVICES}/g, dentalOfficeInfo.services.join(', '));
+
+      const fullInstructions = `${personalizedPrompt}\n\n${officeInfoTemplate}`;
+
+      // Cache the instructions
+      orgInstructionCache.set(cacheKey, {
+        instructions: fullInstructions,
+        timestamp: Date.now()
+      });
+
+      console.log(`[Lexi] ✅ Loaded and cached database instructions for org ${organizationId} (${fullInstructions.length} chars)`);
+      return fullInstructions;
+    } else {
+      console.log('[Lexi] ⚠️ No persona prompt found in database response');
+    }
+  } catch (error) {
+    console.error('[Lexi] ❌ Failed to load database instructions:', error);
   }
 
-  // ⚠️ FALLBACK: Use hardcoded instructions if database not loaded
+  return null;
+}
+
+/**
+ * Generate greeting agent instructions (optimized static version)
+ * @param forRealtime - If true, adapts instructions for OpenAI Realtime SDK (which handles first message automatically)
+ * @param organizationId - Optional organization ID for org-specific instructions
+ */
+export async function generateGreetingAgentInstructions(
+  forRealtime: boolean = false,
+  organizationId?: string
+): Promise<string> {
+  // Try to load from database first if org ID is provided
+  if (organizationId) {
+    const dbInstructions = await loadInstructionsFromDB(organizationId);
+    if (dbInstructions) {
+      return dbInstructions;
+    }
+  }
+
+  // ⚠️ FALLBACK: Use hardcoded instructions
   console.log('[Lexi] Using hardcoded fallback persona');
   
   const firstMessageProtocol = forRealtime
@@ -221,7 +263,9 @@ async function executeGreetingAgentTool(
   toolName: string,
   args: any,
   conversationHistory: any[],
-  playOneMomentAudio?: () => Promise<void>
+  playOneMomentAudio?: () => Promise<void>,
+  organizationId?: string,
+  sessionId?: string
 ): Promise<any> {
   switch (toolName) {
     case 'get_datetime': {
@@ -277,17 +321,18 @@ async function executeGreetingAgentTool(
         }
       }
 
-      // Generate session ID
-      const sessionId = `stt_${Date.now()}`;
+      // Use provided session ID or generate one (fallback)
+      const effectiveSessionId = sessionId || `stt_${Date.now()}`;
 
-      console.log('[Embedded Booking Greeting Agent] 🚀 Calling Orchestrator directly...');
+      console.log(`[Embedded Booking Greeting Agent] 🚀 Calling Orchestrator with sessionId: ${effectiveSessionId}`);
       
       // Call orchestrator directly (no workflow engine)
       const result = await executeOrchestrator(
         args.relevantContextFromLastUserMessage,
         normalizedHistory,
         officeContext,
-        sessionId
+        effectiveSessionId,
+        organizationId
       );
       
       console.log(`[Embedded Booking Greeting Agent] ✅ Orchestrator response: "${result.substring(0, 100)}${result.length > 100 ? '...' : ''}"`);
@@ -307,7 +352,8 @@ async function handleGreetingAgentIterations(
   body: any,
   response: any,
   conversationHistory: any[],
-  playOneMomentAudio?: () => Promise<void>
+  playOneMomentAudio?: () => Promise<void>,
+  organizationId?: string
 ): Promise<string> {
   let currentResponse = response;
   let iterations = 0;
@@ -370,7 +416,7 @@ async function handleGreetingAgentIterations(
       const args = JSON.parse(toolCall.arguments || '{}');
 
       try {
-        const result = await executeGreetingAgentTool(toolName, args, conversationHistory, playOneMomentAudio);
+        const result = await executeGreetingAgentTool(toolName, args, conversationHistory, playOneMomentAudio, organizationId, sessionId);
         const resultString = typeof result === 'string' ? result : JSON.stringify(result);
 
         // Add function call and result to the request body
@@ -469,12 +515,18 @@ export async function callGreetingAgent(
   userMessage: string,
   conversationHistory: any[] = [],
   isFirstMessage: boolean = false,
-  playOneMomentAudio?: () => Promise<void>
+  playOneMomentAudio?: () => Promise<void>,
+  organizationId?: string,
+  sessionId?: string
 ): Promise<string> {
   console.log('[Embedded Booking Greeting Agent] INVOKED - User Message:', userMessage);
+  if (organizationId) {
+    console.log('[Embedded Booking Greeting Agent] Organization ID:', organizationId);
+  }
 
   try {
-    const instructions = generateGreetingAgentInstructions();
+    // Load instructions dynamically based on organization
+    const instructions = await generateGreetingAgentInstructions(false, organizationId);
 
     const cleanInput = conversationHistory
       .filter(item => item.type === 'message')
@@ -488,6 +540,7 @@ export async function callGreetingAgent(
       instructions: instructions,
       tools: greetingAgentTools,
       input: cleanInput,
+      // NOTE: Do NOT pass organizationId here - Responses API forwards to OpenAI which rejects it
     };
 
     if (isFirstMessage) {
@@ -532,7 +585,8 @@ export async function callGreetingAgent(
       body,
       responseData,
       conversationHistory,
-      playOneMomentAudio
+      playOneMomentAudio,
+      organizationId
     );
 
     return finalResponse;

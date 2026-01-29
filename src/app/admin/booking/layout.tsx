@@ -3,12 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { Menu, X, Globe } from 'lucide-react';
+import { Menu, X, LogOut, Building2 } from 'lucide-react';
 import { useTranslation, useTranslations } from '@/lib/i18n/TranslationProvider';
-import { SUPPORTED_LANGUAGES } from '@/lib/languages';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { useOrganization } from '@/app/contexts/OrganizationContext';
-import { OrganizationSwitcher } from '@/components/OrganizationSwitcher';
 
 /**
  * Admin layout with Supabase authentication and organization context
@@ -19,14 +17,13 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const tCommon = useTranslations('common');
-  const { t, locale, setLocale } = useTranslation('admin');
+  const { t } = useTranslation('admin');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [showLangMenu, setShowLangMenu] = useState(false);
   const router = useRouter();
   const pathname = usePathname();
   
   // Use authentication and organization context
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const { currentOrganization, loading: orgLoading } = useOrganization();
 
   // Define navItems with translation keys
@@ -37,13 +34,12 @@ export default function AdminLayout({
     { href: `/admin/booking/schedules`, key: 'schedules' },
     { href: `/admin/booking/operatories`, key: 'operatories' },
     { href: `/admin/booking/patients`, key: 'patients' },
-    { href: `/admin/booking/treatments`, key: 'treatments', label: 'Treatment Plans' },
-    { href: `/admin/booking/treatments-config`, key: 'treatmentsConfig', label: 'Treatments Config' },
+    // { href: `/admin/booking/treatments`, key: 'treatments', label: 'Treatment Plans' },
+    // { href: `/admin/booking/treatments-config`, key: 'treatmentsConfig', label: 'Treatments Config' },
     { href: `/admin/booking/calls`, key: 'calls' },
     { href: `/admin/booking/calls/statistics`, key: 'statistics' },
-    { href: `/admin/booking/settings`, key: 'settings' },
-    { href: `/admin/booking/translations`, key: 'translations' },
-    { href: `/admin/booking/translations/hardcoded`, key: 'hardcodedScanner', label: 'Hardcoded Text Scanner' },
+    // Settings section - consolidated under /admin/settings (includes WhatsApp, Translations, Notifications, etc.)
+    { href: `/admin/settings`, key: 'settings', label: '⚙️ Settings' },
   ];
 
   // Redirect to login if not authenticated
@@ -58,14 +54,13 @@ export default function AdminLayout({
     setIsMobileMenuOpen(false);
   }, [pathname]);
 
-  const switchLanguage = (newLocale: string) => {
-    // Use the context's setLocale (saves to localStorage and loads messages)
-    setLocale(newLocale);
-    setShowLangMenu(false);
-    // Force a page refresh to reload all components with new translations
-    setTimeout(() => {
-      window.location.reload();
-    }, 100);
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      router.push('/landing');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
   };
 
   // Show loading state while checking auth
@@ -107,13 +102,25 @@ export default function AdminLayout({
       <header className="lg:hidden fixed top-0 left-0 right-0 h-14 bg-gray-900 text-white z-40 flex items-center justify-between px-4">
         <h1 className="text-lg font-bold">{t('title')}</h1>
         <div className="flex items-center gap-2">
-          <OrganizationSwitcher />
+          {currentOrganization && (
+            <div className="px-2 py-1 space-y-0.5">
+              <div className="flex items-center gap-1.5">
+                <Building2 className="w-3 h-3 text-gray-400" />
+                <span className="text-xs text-gray-400">
+                  {currentOrganization.name}
+                </span>
+              </div>
+              <div className="text-[10px] text-gray-500 font-mono">
+                ID: {currentOrganization.id}
+              </div>
+            </div>
+          )}
           <button
-            onClick={() => setShowLangMenu(!showLangMenu)}
+            onClick={handleLogout}
             className="p-2 rounded-md hover:bg-gray-800 transition-colors"
-            aria-label={tCommon('change_language')}
+            aria-label="Logout"
           >
-            <Globe className="h-5 w-5" />
+            <LogOut className="h-5 w-5" />
           </button>
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
@@ -137,43 +144,6 @@ export default function AdminLayout({
         />
       )}
 
-      {/* Language Menu Overlay */}
-      {showLangMenu && (
-        <div
-          className="fixed inset-0 bg-black/50 z-[55]"
-          onClick={() => setShowLangMenu(false)}
-        />
-      )}
-
-      {/* Language Selector Dropdown */}
-      {showLangMenu && (
-        <div className="fixed top-16 right-4 lg:top-auto lg:left-6 lg:bottom-20 w-64 bg-white rounded-lg shadow-xl z-[60] max-h-96 overflow-y-auto">
-          <div className="p-3 border-b bg-gray-50 flex items-center gap-2">
-            <Globe className="h-4 w-4 text-gray-600" />
-            <span className="font-medium text-gray-900">{tCommon('select_language')}</span>
-          </div>
-          <div className="p-2">
-            {SUPPORTED_LANGUAGES.map((lang) => (
-              <button
-                key={lang.code}
-                onClick={() => switchLanguage(lang.code)}
-                className={`w-full flex items-center gap-3 px-3 py-2 rounded-md transition-colors ${
-                  locale === lang.code
-                    ? 'bg-blue-100 text-blue-900'
-                    : 'text-gray-700 hover:bg-gray-100'
-                }`}
-              >
-                <span className="text-xl">{lang.flag}</span>
-                <span className="font-medium">{lang.nativeName}</span>
-                {locale === lang.code && (
-                  <span className="ml-auto text-blue-600 text-xs">✓</span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Navigation Sidebar - Desktop & Mobile */}
       <aside
         className={`fixed top-0 left-0 h-full w-64 bg-gray-900 text-white p-6 z-50 transform transition-transform duration-300 ease-in-out ${
@@ -191,7 +161,19 @@ export default function AdminLayout({
               <X className="h-6 w-6" />
             </button>
           </div>
-          <OrganizationSwitcher />
+          {currentOrganization && (
+            <div className="px-2 py-1 space-y-0.5">
+              <div className="flex items-center gap-1.5">
+                <Building2 className="w-3 h-3 text-gray-400" />
+                <span className="text-xs text-gray-400">
+                  {currentOrganization.name}
+                </span>
+              </div>
+              <div className="text-[10px] text-gray-500 font-mono pl-4">
+                ID: {currentOrganization.id}
+              </div>
+            </div>
+          )}
         </div>
         <nav className="space-y-2">
           {navItems.map((item) => {
@@ -215,11 +197,11 @@ export default function AdminLayout({
         </nav>
         <div className="absolute bottom-6 left-6 right-6 space-y-2">
           <button
-            onClick={() => setShowLangMenu(!showLangMenu)}
-            className="w-full px-4 py-2 rounded-md bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors flex items-center justify-center gap-2"
+            onClick={handleLogout}
+            className="w-full px-4 py-2 rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors flex items-center justify-center gap-2"
           >
-            <Globe className="h-4 w-4" />
-            <span className="hidden lg:inline">{SUPPORTED_LANGUAGES.find(l => l.code === locale)?.nativeName || locale.toUpperCase()}</span>
+            <LogOut className="h-4 w-4" />
+            <span>Logout</span>
           </button>
         </div>
       </aside>

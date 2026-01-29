@@ -3,12 +3,19 @@
  * 
  * Processes incoming WhatsApp messages using existing Lexi agent
  * Integrates with Evolution API and Supabase
+ * 
+ * Channel Configuration:
+ * - Reads settings from channel_configurations table
+ * - Uses configured AI backend (GPT-4o by default for text)
+ * - Respects enabled data integrations
  */
 
-import { getSupabaseAdmin } from '../supabase';
+import { getSupabaseAdmin } from '../supabaseClient';
 import { getEvolutionClient } from '../evolution/EvolutionClient';
 import { EvolutionMessageUpsert } from '../evolution/types';
-import { callLexiWhatsApp } from '@/app/agentConfigs/embeddedBooking/lexiAgentWhatsApp';
+import { callLexiWhatsApp, generateLexiInstructions } from '@/app/agentConfigs/embeddedBooking/lexiAgentWhatsApp';
+import { getOrganizationInstructions } from '../agentMode';
+import { getChannelConfig, getModelFromBackend, type ChannelConfig } from '../channelConfigLoader';
 
 // ============================================================================
 // TYPES
@@ -53,6 +60,15 @@ export class WhatsAppMessageHandler {
     const { instanceName, organizationId, remoteJid, conversationId } = context;
 
     try {
+      // Get channel configuration
+      const channelConfig = await getChannelConfig(organizationId, 'whatsapp');
+      
+      // Check if WhatsApp channel is enabled for this organization
+      if (!channelConfig.enabled) {
+        console.log(`⏭️ WhatsApp channel is disabled for org ${organizationId}`);
+        return { success: true }; // Silently ignore
+      }
+
       // Extract message text
       const messageText = this.extractMessageText(messageData);
       
@@ -62,6 +78,8 @@ export class WhatsAppMessageHandler {
       }
 
       console.log(`📨 Processing WhatsApp message: "${messageText.substring(0, 50)}..."`);
+      console.log(`📋 Using AI backend: ${channelConfig.ai_backend}`);
+      console.log(`📋 Data integrations: ${channelConfig.data_integrations.join(', ') || 'none'}`);
 
       // Show typing indicator
       await this.evolutionClient.sendTyping(instanceName, remoteJid);
@@ -75,11 +93,20 @@ export class WhatsAppMessageHandler {
       // Check if this is the first message
       const isFirstMessage = history.length === 0;
 
-      // Generate AI response using Lexi
+      // Get organization-specific instructions (with channel config override)
+      const instructions = channelConfig.instructions || await this.getInstructions(organizationId);
+
+      // Get the model to use based on channel config
+      const model = getModelFromBackend(channelConfig.ai_backend);
+
+      // Generate AI response using Lexi with custom instructions and model
       const aiResponse = await callLexiWhatsApp(
         messageText,
         history,
-        isFirstMessage
+        isFirstMessage,
+        instructions,
+        model, // Pass the configured model
+        channelConfig.data_integrations // Pass enabled data integrations
       );
 
       // Send response via WhatsApp
@@ -114,6 +141,27 @@ export class WhatsAppMessageHandler {
         success: false,
         error: error.message,
       };
+    }
+  }
+
+  /**
+   * Get organization-specific instructions for WhatsApp
+   */
+  private async getInstructions(organizationId: string): Promise<string> {
+    try {
+      const config = await getOrganizationInstructions(organizationId, 'whatsapp');
+      
+      if (config.useManualInstructions && config.whatsappInstructions) {
+        console.log('[WhatsApp] 📋 Using DB instructions');
+        return config.whatsappInstructions;
+      }
+      
+      // Fall back to generating from Twilio Premium (single-agent)
+      console.log('[WhatsApp] 📋 Using hardcoded instructions');
+      return generateLexiInstructions(false); // false = not realtime
+    } catch (error) {
+      console.warn('[WhatsApp] ⚠️ Failed to load instructions, using hardcoded:', error);
+      return generateLexiInstructions(false);
     }
   }
 

@@ -36,6 +36,138 @@ import {
 const ENABLE_SONNET_VALIDATION = process.env.ENABLE_SONNET_VALIDATION !== 'false'; // Enabled by default
 
 /**
+ * Helper function to match time mentions in text to available slots
+ * Handles formats like: "9 AM", "10:30", "2 PM", "nine o'clock", "first", "morning", etc.
+ */
+function matchTimeToSlotFromMessage(
+  text: string,
+  slots: Array<{ DateTimeStart?: string; AptDateTime?: string; ProvNum: number; OpNum?: number; Op?: number }>
+): typeof slots[0] | null {
+  if (!text || !slots || slots.length === 0) return null;
+  
+  const lowerText = text.toLowerCase();
+  
+  // Parse various time formats from text
+  const timePatterns = [
+    /(\d{1,2}):(\d{2})\s*(am|pm)?/i,  // 10:30, 10:30 AM
+    /(\d{1,2})\s*(am|pm)/i,            // 10 AM, 2 PM
+    /(nine|ten|eleven|twelve|one|two|three|four|five|six|seven|eight)\s*(am|pm)?/i,  // nine AM
+  ];
+  
+  const wordToNumber: Record<string, number> = {
+    'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6,
+    'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10, 'eleven': 11, 'twelve': 12
+  };
+  
+  let targetHour: number | null = null;
+  let targetMinute = 0;
+  
+  // Try to extract time from text
+  for (const pattern of timePatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      if (match[1] && /^\d+$/.test(match[1])) {
+        // Numeric hour
+        targetHour = parseInt(match[1]);
+        targetMinute = match[2] ? parseInt(match[2]) : 0;
+        
+        // Handle AM/PM
+        const ampm = match[3]?.toLowerCase() || match[2]?.toLowerCase();
+        if (ampm === 'pm' && targetHour < 12) targetHour += 12;
+        if (ampm === 'am' && targetHour === 12) targetHour = 0;
+      } else if (match[1]) {
+        // Word hour
+        const wordHour = match[1].toLowerCase();
+        targetHour = wordToNumber[wordHour] || null;
+        
+        if (targetHour !== null) {
+          const ampm = match[2]?.toLowerCase();
+          if (ampm === 'pm' && targetHour < 12) targetHour += 12;
+          if (ampm === 'am' && targetHour === 12) targetHour = 0;
+        }
+      }
+      
+      if (targetHour !== null) break;
+    }
+  }
+  
+  // If we found a time, match it to a slot
+  if (targetHour !== null) {
+    // Try exact match first
+    for (const slot of slots) {
+      const slotDateTime = slot.DateTimeStart || slot.AptDateTime;
+      if (!slotDateTime) continue;
+      
+      const slotDate = new Date(slotDateTime);
+      const slotHour = slotDate.getHours();
+      const slotMinute = slotDate.getMinutes();
+      
+      if (slotHour === targetHour && slotMinute === targetMinute) {
+        console.log(`[Slot Matcher] 🎯 Exact match: ${targetHour}:${targetMinute.toString().padStart(2, '0')} → ${slotDateTime}`);
+        return slot;
+      }
+    }
+    
+    // Try hour-only match (ignore minutes)
+    for (const slot of slots) {
+      const slotDateTime = slot.DateTimeStart || slot.AptDateTime;
+      if (!slotDateTime) continue;
+      
+      const slotDate = new Date(slotDateTime);
+      const slotHour = slotDate.getHours();
+      
+      if (slotHour === targetHour) {
+        console.log(`[Slot Matcher] 🎯 Hour match: ${targetHour}:xx → ${slotDateTime}`);
+        return slot;
+      }
+    }
+  }
+  
+  // Fallback: look for keywords like "first", "second", "last"
+  if (lowerText.includes('first') || lowerText.includes('1st') || lowerText.match(/\b1\b/)) {
+    console.log('[Slot Matcher] 🎯 Keyword match: first slot');
+    return slots[0];
+  }
+  if (lowerText.includes('second') || lowerText.includes('2nd') || lowerText.match(/\b2\b/)) {
+    console.log('[Slot Matcher] 🎯 Keyword match: second slot');
+    return slots[1] || slots[0];
+  }
+  if (lowerText.includes('last')) {
+    console.log('[Slot Matcher] 🎯 Keyword match: last slot');
+    return slots[slots.length - 1];
+  }
+  
+  // Check for "morning", "afternoon", "evening"
+  if (lowerText.includes('morning')) {
+    const morningSlot = slots.find(s => {
+      const slotDateTime = s.DateTimeStart || s.AptDateTime;
+      if (!slotDateTime) return false;
+      const hour = new Date(slotDateTime).getHours();
+      return hour >= 6 && hour < 12;
+    });
+    if (morningSlot) {
+      console.log('[Slot Matcher] 🎯 Time period match: morning');
+      return morningSlot;
+    }
+  }
+  if (lowerText.includes('afternoon')) {
+    const afternoonSlot = slots.find(s => {
+      const slotDateTime = s.DateTimeStart || s.AptDateTime;
+      if (!slotDateTime) return false;
+      const hour = new Date(slotDateTime).getHours();
+      return hour >= 12 && hour < 17;
+    });
+    if (afternoonSlot) {
+      console.log('[Slot Matcher] 🎯 Time period match: afternoon');
+      return afternoonSlot;
+    }
+  }
+  
+  console.log('[Slot Matcher] ❌ No match found for:', text.substring(0, 100));
+  return null;
+}
+
+/**
  * Parameter validation rules for each function
  * - required: parameters that MUST be present
  * - optional: parameters that can be omitted
@@ -79,7 +211,7 @@ const FUNCTION_SCHEMAS: Record<string, {
   },
   GetAvailableSlots: {
     required: ['dateStart', 'dateEnd'],
-    optional: ['ProvNum', 'OpNum', 'lengthMinutes', 'searchAll'],
+    optional: ['ProvNum', 'OpNum', 'lengthMinutes', 'searchAll', 'DateStart', 'DateEnd'], // Accept both cases
     // No defaults - function now intelligently searches ALL schedules if none specified
     example: { dateStart: '2025-12-05', dateEnd: '2025-12-05' },
     description: 'Get available time slots. If ProvNum/OpNum not specified, searches all providers/operatories with schedules'
@@ -170,6 +302,21 @@ function validateParameters(
   }
   
   const params = { ...(parameters || {}) };
+  
+  // Normalize GetAvailableSlots parameters FIRST (accept both PascalCase and camelCase)
+  if (functionName === 'GetAvailableSlots') {
+    if (params.DateStart && !params.dateStart) {
+      params.dateStart = params.DateStart;
+      delete params.DateStart;
+      console.log('[Booking API] Normalized DateStart → dateStart:', params.dateStart);
+    }
+    if (params.DateEnd && !params.dateEnd) {
+      params.dateEnd = params.DateEnd;
+      delete params.DateEnd;
+      console.log('[Booking API] Normalized DateEnd → dateEnd:', params.dateEnd);
+    }
+  }
+  
   const missing: string[] = [];
   
   // Check required parameters
@@ -205,38 +352,41 @@ function validateParameters(
     }
   }
   
-  // If missing required params, return error with CLEAR ACTION
-  if (missing.length > 0) {
-    // Build specific ask-for message based on function
-    let userAskMessage = '';
-    if (functionName === 'CreatePatient') {
-      const missingFields: string[] = [];
-      if (missing.includes('FName')) missingFields.push('first name');
-      if (missing.includes('LName')) missingFields.push('last name');
-      if (missing.includes('Birthdate')) missingFields.push('date of birth');
-      if (missing.includes('WirelessPhone')) missingFields.push('phone number');
-      userAskMessage = `STOP! The user has NOT provided: ${missingFields.join(', ')}. You MUST ask the user: "I'll need your ${missingFields.join(', and ')} to create your profile." DO NOT call CreatePatient again until the user provides ALL of these!`;
-    } else if (functionName === 'CreateAppointment') {
-      userAskMessage = `STOP! Cannot book without: ${missing.join(', ')}. You need a valid patient (call GetMultiplePatients first) and available slot (call GetAvailableSlots first) before booking.`;
-    } else {
-      userAskMessage = `STOP! Missing: ${missing.join(', ')}. Ask the user for this information before calling ${functionName} again.`;
-    }
-    
-    return {
-      valid: false,
-      error: {
-        error: true,
-        validationError: true,
-        functionName,
-        message: userAskMessage,
-        required: schema.required,
-        received: params,
-        example: schema.example,
-        action: 'ASK_USER', // Clear action indicator
-        missingFields: missing
+    // If missing required params, return error with CLEAR ACTION
+    if (missing.length > 0) {
+      // Build specific ask-for message based on function
+      let userAskMessage = '';
+      if (functionName === 'CreatePatient') {
+        const missingFields: string[] = [];
+        if (missing.includes('FName')) missingFields.push('first name');
+        if (missing.includes('LName')) missingFields.push('last name');
+        if (missing.includes('Birthdate')) missingFields.push('date of birth');
+        if (missing.includes('WirelessPhone')) missingFields.push('phone number');
+        userAskMessage = `STOP! The user has NOT provided: ${missingFields.join(', ')}. You MUST ask the user: "I'll need your ${missingFields.join(', and ')} to create your profile." DO NOT call CreatePatient again until the user provides ALL of these!`;
+      } else if (functionName === 'CreateAppointment') {
+        userAskMessage = `STOP! Cannot book without: ${missing.join(', ')}. You need a valid patient (call GetMultiplePatients first) and available slot (call GetAvailableSlots first) before booking.`;
+      } else {
+        userAskMessage = `STOP! Missing: ${missing.join(', ')}. Ask the user for this information before calling ${functionName} again.`;
       }
-    };
-  }
+      
+      // Only return error if there are still missing params after auto-fill attempts
+      if (missing.length > 0) {
+        return {
+          valid: false,
+          error: {
+            error: true,
+            validationError: true,
+            functionName,
+            message: userAskMessage,
+            required: schema.required,
+            received: params,
+            example: schema.example,
+            action: 'ASK_USER', // Clear action indicator
+            missingFields: missing
+          }
+        };
+      }
+    }
   
   // Apply defaults for optional parameters
   if (schema.defaults) {
@@ -288,15 +438,53 @@ function validateParameters(
 
 export async function POST(req: NextRequest) {
   try {
-    // Get organization context for multi-tenancy
-    const context = await getCurrentOrganization(req);
-    const orgDb = await getSupabaseWithOrg(context.organizationId);
-    console.log(`[Booking API] Request from org: ${context.organizationId}, user: ${context.user.id}`);
+    // Check if this is a server-side call (from Retell/Twilio WebSocket servers)
+    const orgIdHeader = req.headers.get('X-Organization-Id');
+    
+    let context: { organizationId: string; user: { id: string; email: string }; role: string; permissions: Record<string, Record<string, boolean>> };
+    let orgDb: ReturnType<typeof getSupabaseWithOrg> extends Promise<infer T> ? T : never;
+    
+    if (orgIdHeader) {
+      // Server-side call: Use X-Organization-Id header (trusted internal call)
+      console.log(`[Booking API] Server-side request with X-Organization-Id: ${orgIdHeader}`);
+      orgDb = await getSupabaseWithOrg(orgIdHeader);
+      
+      // Create minimal context for server-side calls
+      context = {
+        organizationId: orgIdHeader,
+        user: {
+          id: 'system', // System user for server-side calls
+          email: 'system@internal'
+        },
+        role: 'owner', // Grant full permissions for internal calls
+        permissions: {}
+      };
+      
+      console.log(`[Booking API] Server-side request from org: ${context.organizationId}`);
+    } else {
+      // Browser/authenticated call: Use cookies and authentication
+      context = await getCurrentOrganization(req);
+      orgDb = await getSupabaseWithOrg(context.organizationId);
+      console.log(`[Booking API] Authenticated request from org: ${context.organizationId}, user: ${context.user.id}`);
+    }
     
     const body = await req.json();
     console.log('[Booking API] Received request:', body);
     
-    const { functionName, parameters, sessionId, conversationHistory } = body;
+    let { functionName, parameters, sessionId, conversationHistory, channel, dataIntegrations } = body;
+    
+    // CRITICAL FIX: Remove organizationId from parameters if LLM accidentally included it
+    // organizationId should ONLY be passed via header (X-Organization-Id), not as a function parameter
+    if (parameters && 'organizationId' in parameters) {
+      console.log(`[Booking API] ⚠️  Removing organizationId from parameters (should be in header only)`);
+      const { organizationId: _removed, ...cleanedParams } = parameters;
+      parameters = cleanedParams;
+    }
+    
+    // Log channel context if provided
+    if (channel) {
+      console.log(`[Booking API] Channel: ${channel}, Allowed integrations: ${dataIntegrations?.join(', ') || 'all'}`);
+    }
     
     // If sessionId and conversationHistory provided, sync messages to state
     // This ensures the Calls section can display conversation history
@@ -337,6 +525,38 @@ export async function POST(req: NextRequest) {
           intent: state.intent || '(not detected)',
           appointmentType: state.appointment.type || '(not found)',
         });
+      }
+      
+      // CRITICAL: After processing messages, check if we need to detect slot selection
+      // This handles cases where user chose a time but selectedSlot wasn't set yet
+      if (!state.appointment.selectedSlot && state.messages.length > 0) {
+        // Get last user message to check for time selection
+        const lastUserMessage = state.messages
+          .filter(m => m.role === 'user')
+          .pop()?.content || '';
+        
+        // Check if we have available slots stored from a previous GetAvailableSlots call
+        // Look through function calls to find the most recent GetAvailableSlots result
+        const getAvailableSlotsCall = state.functionCalls
+          .slice()
+          .reverse()
+          .find(fc => fc.functionName === 'GetAvailableSlots' && fc.result && !fc.error);
+        
+        if (getAvailableSlotsCall && Array.isArray(getAvailableSlotsCall.result)) {
+          const slots = getAvailableSlotsCall.result;
+          console.log(`[Booking API] 🔍 Checking if user selected a slot from ${slots.length} available slots`);
+          
+          // Try to match the user's message to a specific slot
+          const matchedSlot = matchTimeToSlotFromMessage(lastUserMessage, slots);
+          if (matchedSlot) {
+            state.appointment.selectedSlot = {
+              dateTime: matchedSlot.DateTimeStart || matchedSlot.AptDateTime,
+              provNum: matchedSlot.ProvNum,
+              opNum: matchedSlot.OpNum || matchedSlot.Op
+            };
+            console.log(`[Booking API] 🎯 Auto-detected selectedSlot:`, state.appointment.selectedSlot);
+          }
+        }
       }
     }
     
@@ -403,6 +623,38 @@ export async function POST(req: NextRequest) {
     let validatedParams = validation.valid ? validation.params : enhancedParameters;
     
     // ========================================
+    // AUTO-FILL OPERATORY FOR CreateAppointment (if missing)
+    // ========================================
+    if (!validation.valid && functionName === 'CreateAppointment' && validation.error?.missingFields?.includes('Op')) {
+      console.log('[Booking API] CreateAppointment missing Op - fetching first active operatory...');
+      try {
+        const { data: firstOp, error: opError } = await orgDb
+          .from('operatories')
+          .select('id')
+          .eq('organization_id', context.organizationId)
+          .eq('is_active', true)
+          .order('id', { ascending: true })
+          .limit(1)
+          .single();
+        
+        if (firstOp && !opError) {
+          validatedParams.Op = firstOp.id;
+          console.log(`[Booking API] 🏥 Auto-filled Op=${firstOp.id} (first active operatory)`);
+          
+          // Re-validate with the auto-filled Op
+          validation = validateParameters(functionName, validatedParams);
+          if (validation.valid) {
+            validatedParams = validation.params;
+          }
+        } else {
+          console.error('[Booking API] ❌ No active operatories found:', opError);
+        }
+      } catch (error) {
+        console.error('[Booking API] Error fetching operatory:', error);
+      }
+    }
+    
+    // ========================================
     // LLM EXTRACTION FALLBACK
     // If validation fails AND we have sessionId AND conversation history
     // ========================================
@@ -464,7 +716,39 @@ export async function POST(req: NextRequest) {
       }
     }
     
-    // If still invalid after LLM fallback, return error
+    // ========================================
+    // AUTO-FILL OPERATORY FOR CreateAppointment (if still missing after LLM extraction)
+    // ========================================
+    if (!validation.valid && functionName === 'CreateAppointment' && validation.error?.missingFields?.includes('Op')) {
+      console.log('[Booking API] CreateAppointment missing Op - fetching first active operatory...');
+      try {
+        const { data: firstOp, error: opError } = await orgDb
+          .from('operatories')
+          .select('id')
+          .eq('organization_id', context.organizationId)
+          .eq('is_active', true)
+          .order('id', { ascending: true })
+          .limit(1)
+          .single();
+        
+        if (firstOp && !opError) {
+          validatedParams.Op = firstOp.id;
+          console.log(`[Booking API] 🏥 Auto-filled Op=${firstOp.id} (first active operatory)`);
+          
+          // Re-validate with the auto-filled Op
+          validation = validateParameters(functionName, validatedParams);
+          if (validation.valid) {
+            validatedParams = validation.params;
+          }
+        } else {
+          console.error('[Booking API] ❌ No active operatories found:', opError);
+        }
+      } catch (error) {
+        console.error('[Booking API] Error fetching operatory:', error);
+      }
+    }
+    
+    // If still invalid after all auto-fill attempts, return error
     if (!validation.valid) {
       console.log(`[Booking API] Final validation failed for ${functionName}:`, validation.error.message);
       
@@ -487,12 +771,35 @@ export async function POST(req: NextRequest) {
       // SONNET VALIDATION REMOVED
       // TODO: Implement LLM-based validation layer later
       
-      // Execute the handler function with validated parameters and org-scoped database
-      const result = await handler(validatedParams, orgDb);
+      // Add organization_id and channel context to parameters for multi-tenancy
+      const paramsWithOrg = {
+        ...validatedParams,
+        organization_id: context.organizationId,
+        // Channel context for SyncManager to determine which integrations to sync
+        __syncContext: channel ? {
+          channel,
+          allowedIntegrations: dataIntegrations || []
+        } : undefined
+      };
+      
+      // Execute the handler function with validated parameters, org-scoped database, and organizationId
+      const result = await handler(paramsWithOrg, orgDb, context.organizationId);
       
       // Record successful call in conversation state
       if (sessionId) {
         recordFunctionCall(sessionId, functionName, validatedParams, result, undefined, autoFilledParams);
+      }
+      
+      // Enhanced logging for appointment bookings
+      if (functionName === 'CreateAppointment') {
+        console.log(`[Booking API] ✅ APPOINTMENT CREATED SUCCESSFULLY:`, {
+          sessionId,
+          patientNum: validatedParams.PatNum,
+          dateTime: validatedParams.AptDateTime,
+          provider: validatedParams.ProvNum,
+          operatory: validatedParams.Op,
+          result: result
+        });
       }
       
       // Return success response
@@ -502,6 +809,17 @@ export async function POST(req: NextRequest) {
       // Record error in conversation state
       if (sessionId) {
         recordFunctionCall(sessionId, functionName, validatedParams, undefined, error.message, autoFilledParams);
+      }
+      
+      // Enhanced logging for appointment booking failures
+      if (functionName === 'CreateAppointment') {
+        console.error(`[Booking API] ❌ APPOINTMENT BOOKING FAILED:`, {
+          sessionId,
+          error: error.message,
+          parameters: validatedParams,
+          autoFilled: autoFilledParams,
+          stack: error.stack
+        });
       }
       
       // Check if this is a validation error from the handler

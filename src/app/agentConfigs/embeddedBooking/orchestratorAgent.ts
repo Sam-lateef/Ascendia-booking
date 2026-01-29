@@ -837,12 +837,14 @@ export const orchestratorTools = [
  * @param parameters - Function parameters
  * @param sessionId - Optional session ID for conversation state tracking
  * @param conversationHistory - Optional conversation history for LLM extraction fallback
+ * @param organizationId - Optional organization ID for server-side calls (Retell/Twilio)
  */
 async function callBookingAPI(
   functionName: string,
   parameters: Record<string, any>,
   sessionId?: string,
-  conversationHistory?: Array<{ role: string; content: string }>
+  conversationHistory?: Array<{ role: string; content: string }>,
+  organizationId?: string
 ): Promise<any> {
   try {
     const requestBody: any = {
@@ -865,11 +867,22 @@ async function callBookingAPI(
       ? '' 
       : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000');
     
+    // Build headers - include X-Organization-Id for server-side calls
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    
+    // Add organization ID header for server-side calls (Retell/Twilio)
+    // This allows /api/booking to identify the organization when cookies aren't available
+    if (organizationId) {
+      headers['X-Organization-Id'] = organizationId;
+      console.log(`[Orchestrator] Adding X-Organization-Id header: ${organizationId}`);
+    }
+    
     const response = await fetch(`${baseUrl}/api/booking`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
+      credentials: 'include', // Important: Send cookies with request for authentication (browser context)
       body: JSON.stringify(requestBody),
     });
 
@@ -1034,12 +1047,13 @@ function preValidateFunctionCall(
     }
     
     case 'GetAvailableSlots': {
-      // Required: dateStart, dateEnd, ProvNum, OpNum
+      // Required: dateStart, dateEnd
+      // ProvNum and OpNum are optional - if not provided, searches ALL providers/operatories
       if (params.dateStart) have.dateStart = params.dateStart; else missing.push('dateStart');
       if (params.dateEnd) have.dateEnd = params.dateEnd; else missing.push('dateEnd');
-      // ProvNum and OpNum have defaults, so less critical
-      have.ProvNum = params.ProvNum || 1;
-      have.OpNum = params.OpNum || 1;
+      // Don't default to 1 - let it search all providers and operatories
+      if (params.ProvNum) have.ProvNum = params.ProvNum;
+      if (params.OpNum) have.OpNum = params.OpNum;
       
       if (missing.length > 0) {
         return {
@@ -1074,17 +1088,19 @@ function preValidateFunctionCall(
 /**
  * Iteratively handles function calls returned by the Responses API until
  * we get a final textual answer. Returns that answer as a string.
- * 
+ *
  * @param body - Request body for Responses API
  * @param response - Current response
  * @param sessionId - Session ID for conversation state
  * @param conversationHistory - Conversation history for LLM extraction fallback
+ * @param organizationId - Organization ID for server-side calls
  */
 async function handleResponseIterations(
   body: any,
   response: any,
   sessionId?: string,
-  conversationHistory?: any[]
+  conversationHistory?: any[],
+  organizationId?: string
 ): Promise<string> {
   let currentResponse = response;
   let iterations = 0;
@@ -1290,7 +1306,7 @@ async function handleResponseIterations(
                 AptDateTime: selectedSlot.DateTimeStart,
                 ProvNum: selectedSlot.ProvNum,
                 Op: selectedSlot.OpNum
-              }, sessionId);
+              }, sessionId, undefined, organizationId);
               
               console.log('[Orchestrator] ✅ Auto-RESCHEDULED successfully:', updateResult);
               return finalText; // Return the agent's confirmation message
@@ -1434,7 +1450,7 @@ async function handleResponseIterations(
               Op: selectedSlot.OpNum,
               ProvNum: selectedSlot.ProvNum,
               Note: 'Automated booking after slot confirmation'
-            }, sessionId, formattedHistoryForAutoBook);
+            }, sessionId, formattedHistoryForAutoBook, organizationId);
             
             console.log('[Orchestrator] ✅ Auto-booked appointment after validation:', bookingResult);
             
@@ -1656,7 +1672,7 @@ async function handleResponseIterations(
         }
 
         try {
-          const result = await callBookingAPI(functionName, finalParameters, sessionId, formattedHistory);
+          const result = await callBookingAPI(functionName, finalParameters, sessionId, formattedHistory, organizationId);
 
           body.input.push(
             {
@@ -1727,17 +1743,19 @@ async function handleResponseIterations(
 
 /**
  * Core orchestrator function (can be called directly or via tool)
- * 
+ *
  * @param relevantContextFromLastUserMessage - Context from the user's message
  * @param conversationHistory - Full conversation history
  * @param officeContext - Office context (providers, operatories, etc.)
  * @param sessionId - Session ID for conversation state tracking (enables LLM extraction fallback)
+ * @param organizationId - Organization ID for multi-tenancy (for server-side calls like Retell/Twilio)
  */
 export async function executeOrchestrator(
   relevantContextFromLastUserMessage: string,
   conversationHistory: any[] = [],
   officeContext?: EmbeddedBookingOfficeContext,
-  sessionId?: string
+  sessionId?: string,
+  organizationId?: string
 ): Promise<string> {
   // Generate sessionId if not provided
   const effectiveSessionId = sessionId || `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -1857,8 +1875,8 @@ export async function executeOrchestrator(
   };
 
   const response = await fetchResponsesMessage(body);
-  const finalResponse = await handleResponseIterations(body, response, effectiveSessionId, conversationHistory);
-  
+  const finalResponse = await handleResponseIterations(body, response, effectiveSessionId, conversationHistory, organizationId);
+
   return finalResponse;
 
   } catch (error: any) {

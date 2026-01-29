@@ -65,7 +65,9 @@ export interface DentalChartState {
   toggleSurface: (surface: ToothSurface) => void;
   clearSurfaces: () => void;
   addTreatment: (treatment: Treatment, notes?: string) => void;
+  addTreatmentDirect: (treatment: Treatment, notes?: string) => void;
   removeTreatment: (treatmentId: string) => void;
+  loadTreatments: (treatments: ChartedTreatment[]) => void;
   clearAll: () => void;
 }
 

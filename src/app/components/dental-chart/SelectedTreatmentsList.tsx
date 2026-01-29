@@ -6,7 +6,13 @@ import { Trash2, AlertCircle } from 'lucide-react';
 import { useDentalChartStore } from './dentalChartStore';
 import { categoryLabels } from './treatments';
 
-export const SelectedTreatmentsList: React.FC = () => {
+interface SelectedTreatmentsListProps {
+  hideDentalFeatures?: boolean;
+}
+
+export const SelectedTreatmentsList: React.FC<SelectedTreatmentsListProps> = ({ 
+  hideDentalFeatures = false 
+}) => {
   const tCommon = useTranslations('common');
   const { chartedTreatments, removeTreatment, clearAll } = useDentalChartStore();
 
@@ -16,7 +22,10 @@ export const SelectedTreatmentsList: React.FC = () => {
         <AlertCircle className="h-8 w-8 text-gray-400 mx-auto mb-2" />
         <p className="text-gray-500">{tCommon('no_treatments_added_yet')}</p>
         <p className="text-sm text-gray-400 mt-1">
-          Select a tooth from the chart to add a treatment
+          {hideDentalFeatures 
+            ? 'Click the button below to add services'
+            : 'Select a tooth from the chart to add a treatment'
+          }
         </p>
       </div>
     );
@@ -55,16 +64,18 @@ export const SelectedTreatmentsList: React.FC = () => {
           >
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-semibold text-sm">
-                  {charted.tooth.toothFdi}
-                </span>
+                {!hideDentalFeatures && (
+                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-semibold text-sm">
+                    {charted.tooth.toothFdi}
+                  </span>
+                )}
                 <div>
                   <h4 className="font-medium text-gray-900">
                     {charted.treatment.name}
                   </h4>
                   <p className="text-xs text-gray-500">
                     {categoryLabels[charted.treatment.category]}
-                    {charted.tooth.surfaces.length > 0 && (
+                    {!hideDentalFeatures && charted.tooth.surfaces.length > 0 && (
                       <> • Surface: {charted.tooth.surfaces.join('')}</>
                     )}
                   </p>

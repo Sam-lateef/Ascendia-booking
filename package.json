@@ -14,7 +14,9 @@
     "start": "next start",
     "start:websocket": "tsx src/retell/server.ts",
     "lint": "next lint",
-    "seed:booking": "tsx scripts/seed-booking-data.ts"
+    "seed:booking": "tsx scripts/seed-booking-data.ts",
+    "deploy:websocket": "powershell -ExecutionPolicy Bypass -File ./scripts/deploy-websocket.ps1",
+    "deploy:websocket:bash": "bash ./scripts/deploy-websocket.sh"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.0",
@@ -49,6 +51,7 @@
     "react-day-picker": "^9.11.2",
     "react-dom": "^19.0.0",
     "react-markdown": "^9.0.3",
+    "resend": "^6.8.0",
     "retell-client-js-sdk": "^2.0.7",
     "retell-sdk": "^1.0.0",
     "tailwind-merge": "^3.4.0",

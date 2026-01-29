@@ -27,21 +27,21 @@ export function OrganizationSwitcher() {
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+        className="flex items-center gap-1.5 px-2 py-1 hover:bg-gray-800 rounded transition-colors"
       >
         {currentOrganization.logo_url ? (
           <img
             src={currentOrganization.logo_url}
             alt={currentOrganization.name}
-            className="w-5 h-5 rounded"
+            className="w-3 h-3 rounded"
           />
         ) : (
-          <Building2 className="w-5 h-5 text-gray-600" />
+          <Building2 className="w-3 h-3 text-gray-400" />
         )}
-        <span className="text-sm font-medium text-gray-700">
+        <span className="text-xs text-gray-400">
           {currentOrganization.name}
         </span>
-        <ChevronDown className={`w-4 h-4 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`w-3 h-3 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {isOpen && (

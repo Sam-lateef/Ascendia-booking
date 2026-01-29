@@ -1,28 +1,39 @@
-# fly.toml app configuration for WebSocket server
-# This is a separate Fly.io app for the Retell WebSocket server
+# fly-websocket.toml - Fly.io configuration for WebSocket server
+# This deploys the standalone WebSocket server for Retell and Twilio
 
-app = 'ascendiaai'
-primary_region = 'iad'
+app = 'ascendia-websocket'
+primary_region = 'iad'  # Choose region close to your users
 
 [build]
   dockerfile = "Dockerfile.websocket"
 
+[deploy]
+  strategy = 'immediate'
+  max_unavailable = 1
+
 [env]
   NODE_ENV = 'production'
   PORT = '8080'
+  HOSTNAME = '0.0.0.0'
 
-[http_service]
+# WebSocket service configuration
+[[services]]
+  protocol = 'tcp'
   internal_port = 8080
-  force_https = true
-  auto_stop_machines = 'stop'
-  auto_start_machines = true
-  min_machines_running = 1
-  processes = ['app']
 
-  [[http_service.checks]]
+  [[services.ports]]
+    port = 80
+    handlers = ['http']
+
+  [[services.ports]]
+    port = 443
+    handlers = ['tls', 'http']
+
+  # Health check for the WebSocket server
+  [[services.http_checks]]
     interval = '30s'
-    timeout = '10s'
-    grace_period = '30s'
+    timeout = '5s'
+    grace_period = '10s'
     method = 'GET'
     path = '/health'
 
@@ -30,4 +41,3 @@ primary_region = 'iad'
   cpu_kind = 'shared'
   cpus = 1
   memory_mb = 512
-

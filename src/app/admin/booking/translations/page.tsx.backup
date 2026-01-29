@@ -1,0 +1,740 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
+import { SUPPORTED_LANGUAGES } from '@/lib/languages';
+import { 
+  Loader2, 
+  Search, 
+  Globe, 
+  Save, 
+  Wand2, 
+  ScanSearch, 
+  AlertTriangle, 
+  CheckCircle2,
+  Plus,
+  FileCode,
+  ChevronDown,
+  ChevronRight
+} from 'lucide-react';
+
+interface TranslationEntry {
+  key: string;
+  english: string;
+  translated: string;
+}
+
+interface ScannedKey {
+  key: string;
+  section: string;
+  fullKey: string;
+  files: string[];
+}
+
+interface ScanResult {
+  success: boolean;
+  scannedKeys: ScannedKey[];
+  missingKeys: string[];
+  existingKeys: string[];
+  totalFilesScanned: number;
+  error?: string;
+}
+
+export default function TranslationsPage() {
+  const t = useTranslations('translations');
+  const tCommon = useTranslations('common');
+  const [context, setContext] = useState('');
+  const [targetLanguage, setTargetLanguage] = useState('ar');
+  const [translations, setTranslations] = useState<TranslationEntry[]>([]);
+  const [filteredTranslations, setFilteredTranslations] = useState<TranslationEntry[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [translating, setTranslating] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  // Scanner state
+  const [scanning, setScanning] = useState(false);
+  const [scanResult, setScanResult] = useState<ScanResult | null>(null);
+  const [showScanResults, setShowScanResults] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [missingKeyPlaceholders, setMissingKeyPlaceholders] = useState<Record<string, string>>({});
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+
+  // Load context and existing translations
+  useEffect(() => {
+    loadContext();
+  }, []);
+
+  useEffect(() => {
+    if (targetLanguage) {
+      loadTranslations(targetLanguage);
+    }
+  }, [targetLanguage]);
+
+  useEffect(() => {
+    filterTranslations();
+  }, [searchQuery, translations]);
+
+  const loadContext = async () => {
+    try {
+      const response = await fetch('/messages/context.json');
+      const data = await response.json();
+      setContext(JSON.stringify(data, null, 2));
+    } catch (error) {
+      console.error('Failed to load context:', error);
+    }
+  };
+
+  const loadTranslations = async (locale: string) => {
+    setLoading(true);
+    try {
+      // Load English (source)
+      const enResponse = await fetch('/messages/en.json');
+      const enData = await enResponse.json();
+
+      // Try to load target language (may not exist yet)
+      let targetData: Record<string, any> = {};
+      try {
+        const targetResponse = await fetch(`/messages/${locale}.json`);
+        if (targetResponse.ok) {
+          targetData = await targetResponse.json();
+        }
+      } catch (e) {
+        // Target language doesn't exist yet, that's okay
+      }
+
+      // Flatten the nested JSON structure
+      const entries = flattenTranslations(enData, targetData);
+      setTranslations(entries);
+    } catch (error) {
+      console.error('Failed to load translations:', error);
+      setMessage({ type: 'error', text: t('errorLoad') });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const flattenTranslations = (
+    enData: Record<string, any>,
+    targetData: Record<string, any>,
+    prefix = ''
+  ): TranslationEntry[] => {
+    const entries: TranslationEntry[] = [];
+
+    for (const key in enData) {
+      const fullKey = prefix ? `${prefix}.${key}` : key;
+      const enValue = enData[key];
+      const targetValue = targetData[key];
+
+      if (typeof enValue === 'object' && enValue !== null) {
+        // Recursively flatten nested objects
+        entries.push(
+          ...flattenTranslations(
+            enValue,
+            targetValue || {},
+            fullKey
+          )
+        );
+      } else {
+        entries.push({
+          key: fullKey,
+          english: String(enValue),
+          translated: typeof targetValue === 'string' ? targetValue : '',
+        });
+      }
+    }
+
+    return entries;
+  };
+
+  const unflattenTranslations = (entries: TranslationEntry[]): Record<string, any> => {
+    const result: Record<string, any> = {};
+
+    for (const entry of entries) {
+      const keys = entry.key.split('.');
+      let current = result;
+
+      for (let i = 0; i < keys.length - 1; i++) {
+        if (!current[keys[i]]) {
+          current[keys[i]] = {};
+        }
+        current = current[keys[i]];
+      }
+
+      current[keys[keys.length - 1]] = entry.translated || entry.english;
+    }
+
+    return result;
+  };
+
+  const filterTranslations = () => {
+    if (!searchQuery.trim()) {
+      setFilteredTranslations(translations);
+      return;
+    }
+
+    const query = searchQuery.toLowerCase();
+    const filtered = translations.filter(
+      (entry) =>
+        entry.key.toLowerCase().includes(query) ||
+        entry.english.toLowerCase().includes(query) ||
+        entry.translated.toLowerCase().includes(query)
+    );
+    setFilteredTranslations(filtered);
+  };
+
+  const handleAutoTranslate = async () => {
+    setTranslating(true);
+    setMessage(null);
+
+    try {
+      // Load English messages
+      const enResponse = await fetch('/messages/en.json');
+      const enData = await enResponse.json();
+
+      // Parse context
+      const contextObj = JSON.parse(context);
+
+      const response = await fetch('/api/admin/translations/ai-translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          targetLanguage,
+          context: contextObj,
+          sourceMessages: enData,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Reload translations with the new data
+        const entries = flattenTranslations(enData, data.translatedMessages);
+        setTranslations(entries);
+        setMessage({
+          type: 'success',
+          text: `${t('successTranslated')} ${SUPPORTED_LANGUAGES.find(l => l.code === targetLanguage)?.nativeName}`,
+        });
+      } else {
+        setMessage({ type: 'error', text: data.error || t('errorTranslate') });
+      }
+    } catch (error) {
+      console.error('Translation error:', error);
+      setMessage({ type: 'error', text: t('errorTranslate') });
+    } finally {
+      setTranslating(false);
+    }
+  };
+
+  const handleSaveTranslations = async () => {
+    setSaving(true);
+    setMessage(null);
+
+    try {
+      const messages = unflattenTranslations(translations);
+      let contextObj;
+      try {
+        contextObj = JSON.parse(context);
+      } catch (e) {
+        contextObj = undefined;
+      }
+
+      const response = await fetch('/api/admin/translations/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          locale: targetLanguage,
+          messages,
+          context: contextObj,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setMessage({ type: 'success', text: t('successSaved') });
+      } else {
+        setMessage({ type: 'error', text: data.error || t('errorSave') });
+      }
+    } catch (error) {
+      console.error('Save error:', error);
+      setMessage({ type: 'error', text: t('errorSave') });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateTranslation = (key: string, value: string) => {
+    setTranslations((prev) =>
+      prev.map((entry) => (entry.key === key ? { ...entry, translated: value } : entry))
+    );
+  };
+
+  // Scanner functions
+  const handleScanCodebase = async () => {
+    setScanning(true);
+    setMessage(null);
+    setScanResult(null);
+
+    try {
+      const response = await fetch('/api/admin/translations/scan');
+      const data: ScanResult = await response.json();
+
+      if (data.success) {
+        setScanResult(data);
+        setShowScanResults(true);
+        
+        // Initialize placeholders for missing keys
+        const placeholders: Record<string, string> = {};
+        for (const key of data.missingKeys) {
+          const parts = key.split('.');
+          const leafKey = parts[parts.length - 1];
+          placeholders[key] = generatePlaceholder(leafKey);
+        }
+        setMissingKeyPlaceholders(placeholders);
+        
+        if (data.missingKeys.length === 0) {
+          setMessage({ type: 'success', text: `✅ All ${data.scannedKeys.length} keys are in sync! Scanned ${data.totalFilesScanned} files.` });
+        } else {
+          setMessage({ 
+            type: 'error', 
+            text: `⚠️ Found ${data.missingKeys.length} missing keys in ${data.totalFilesScanned} files` 
+          });
+        }
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to scan codebase' });
+      }
+    } catch (error) {
+      console.error('Scan error:', error);
+      setMessage({ type: 'error', text: 'Failed to scan codebase' });
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const handleSyncMissingKeys = async () => {
+    if (!scanResult?.missingKeys.length) return;
+
+    setSyncing(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch('/api/admin/translations/scan', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          missingKeys: scanResult.missingKeys,
+          placeholders: missingKeyPlaceholders,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        setMessage({ type: 'success', text: `✅ ${data.message}` });
+        // Reload translations to show new keys
+        await loadTranslations(targetLanguage);
+        // Re-scan to update the missing keys list
+        await handleScanCodebase();
+      } else {
+        setMessage({ type: 'error', text: data.error || 'Failed to sync keys' });
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+      setMessage({ type: 'error', text: 'Failed to sync keys' });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
+  const generatePlaceholder = (key: string): string => {
+    return key
+      .replace(/([A-Z])/g, ' $1')
+      .replace(/[_-]/g, ' ')
+      .replace(/^\s+/, '')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
+  };
+
+  const updatePlaceholder = (fullKey: string, value: string) => {
+    setMissingKeyPlaceholders(prev => ({
+      ...prev,
+      [fullKey]: value,
+    }));
+  };
+
+  const toggleSection = (section: string) => {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(section)) {
+        next.delete(section);
+      } else {
+        next.add(section);
+      }
+      return next;
+    });
+  };
+
+  // Group missing keys by section
+  const getMissingKeysBySection = () => {
+    if (!scanResult?.missingKeys) return {};
+    
+    const grouped: Record<string, string[]> = {};
+    for (const key of scanResult.missingKeys) {
+      const section = key.split('.')[0];
+      if (!grouped[section]) {
+        grouped[section] = [];
+      }
+      grouped[section].push(key);
+    }
+    return grouped;
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">{t('title')}</h1>
+            <p className="text-gray-600 mt-2">{t('subtitle')}</p>
+          </div>
+          <a
+            href="/admin/booking/translations/hardcoded"
+            className="flex items-center gap-2 px-4 py-2 bg-orange-100 text-orange-700 hover:bg-orange-200 rounded-lg transition-colors text-sm font-medium"
+          >
+            <AlertTriangle className="h-4 w-4" />
+            Find Hardcoded Text
+          </a>
+        </div>
+      </div>
+
+      {/* Scanner Card - NEW */}
+      <Card className="border-2 border-blue-200 bg-blue-50/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-blue-800">
+            <ScanSearch className="h-5 w-5" />
+            Code Scanner
+          </CardTitle>
+          <CardDescription className="text-blue-700">
+            Scan your codebase to find all translation keys and detect missing entries in en.json
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={handleScanCodebase}
+              disabled={scanning}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {scanning ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Scanning...
+                </>
+              ) : (
+                <>
+                  <ScanSearch className="mr-2 h-4 w-4" />
+                  Scan Codebase
+                </>
+              )}
+            </Button>
+
+            {scanResult && scanResult.missingKeys.length > 0 && (
+              <Button
+                onClick={handleSyncMissingKeys}
+                disabled={syncing}
+                className="bg-orange-600 hover:bg-orange-700"
+              >
+                {syncing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add {scanResult.missingKeys.length} Missing Keys
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+
+          {/* Scan Results Summary */}
+          {scanResult && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
+              <div className="bg-white rounded-lg p-3 border">
+                <div className="text-2xl font-bold text-gray-900">{scanResult.totalFilesScanned}</div>
+                <div className="text-sm text-gray-500">Files Scanned</div>
+              </div>
+              <div className="bg-white rounded-lg p-3 border">
+                <div className="text-2xl font-bold text-gray-900">{scanResult.scannedKeys.length}</div>
+                <div className="text-sm text-gray-500">{tCommon('keys_found')}</div>
+              </div>
+              <div className="bg-white rounded-lg p-3 border">
+                <div className="text-2xl font-bold text-green-600">{scanResult.existingKeys.length}</div>
+                <div className="text-sm text-gray-500">{tCommon('in_enjson')}</div>
+              </div>
+              <div className={`bg-white rounded-lg p-3 border ${scanResult.missingKeys.length > 0 ? 'border-orange-300 bg-orange-50' : ''}`}>
+                <div className={`text-2xl font-bold ${scanResult.missingKeys.length > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                  {scanResult.missingKeys.length}
+                </div>
+                <div className="text-sm text-gray-500">{tCommon('missing_keys')}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Missing Keys Details */}
+          {scanResult && scanResult.missingKeys.length > 0 && showScanResults && (
+            <div className="mt-4 bg-white rounded-lg border">
+              <div className="p-3 border-b bg-orange-50 flex items-center justify-between">
+                <div className="flex items-center gap-2 text-orange-800 font-medium">
+                  <AlertTriangle className="h-4 w-4" />
+                  Missing Translation Keys
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowScanResults(false)}
+                  className="text-gray-500"
+                >
+                  Hide
+                </Button>
+              </div>
+              <div className="max-h-[400px] overflow-y-auto">
+                {Object.entries(getMissingKeysBySection()).map(([section, keys]) => (
+                  <div key={section} className="border-b last:border-b-0">
+                    <button
+                      onClick={() => toggleSection(section)}
+                      className="w-full px-4 py-2 flex items-center justify-between hover:bg-gray-50 text-left"
+                    >
+                      <div className="flex items-center gap-2">
+                        {expandedSections.has(section) ? (
+                          <ChevronDown className="h-4 w-4 text-gray-400" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-gray-400" />
+                        )}
+                        <span className="font-medium text-gray-700">{section}</span>
+                        <span className="text-sm text-orange-600 bg-orange-100 px-2 py-0.5 rounded">
+                          {keys.length} missing
+                        </span>
+                      </div>
+                    </button>
+                    {expandedSections.has(section) && (
+                      <div className="px-4 pb-3 space-y-2">
+                        {keys.map(fullKey => {
+                          const scannedKey = scanResult.scannedKeys.find(k => k.fullKey === fullKey);
+                          return (
+                            <div key={fullKey} className="bg-gray-50 rounded p-3">
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1">
+                                  <code className="text-sm font-mono text-orange-700">{fullKey}</code>
+                                  {scannedKey && scannedKey.files.length > 0 && (
+                                    <div className="mt-1 flex items-center gap-1 text-xs text-gray-500">
+                                      <FileCode className="h-3 w-3" />
+                                      {scannedKey.files.slice(0, 2).join(', ')}
+                                      {scannedKey.files.length > 2 && ` +${scannedKey.files.length - 2} more`}
+                                    </div>
+                                  )}
+                                </div>
+                                <Input
+                                  value={missingKeyPlaceholders[fullKey] || ''}
+                                  onChange={(e) => updatePlaceholder(fullKey, e.target.value)}
+                                  placeholder={tCommon('english_text')}
+                                  className="w-64 text-sm"
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* All Synced Message */}
+          {scanResult && scanResult.missingKeys.length === 0 && (
+            <div className="flex items-center gap-2 text-green-700 bg-green-50 p-3 rounded-lg">
+              <CheckCircle2 className="h-5 w-5" />
+              <span>{tCommon('all_translation_keys_are_in_sy')}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Business Context Card */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Globe className="h-5 w-5" />
+            {t('businessContext')}
+          </CardTitle>
+          <CardDescription>{t('tipContext')}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            value={context}
+            onChange={(e) => setContext(e.target.value)}
+            placeholder={t('businessContextPlaceholder')}
+            className="min-h-[120px] font-mono text-sm"
+          />
+        </CardContent>
+      </Card>
+
+      {/* Translation Controls */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{tCommon('translation_controls')}</CardTitle>
+          <CardDescription>{t('tipAutoTranslate')}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="target-language">{t('targetLanguage')}</Label>
+              <Select value={targetLanguage} onValueChange={setTargetLanguage}>
+                <SelectTrigger id="target-language">
+                  <SelectValue placeholder={t('selectLanguage')} />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px]">
+                  {SUPPORTED_LANGUAGES.filter((l) => l.code !== 'en').map((lang) => (
+                    <SelectItem key={lang.code} value={lang.code}>
+                      <div className="flex items-center gap-2">
+                        <span>{lang.flag}</span>
+                        <span>{lang.nativeName}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="search">{tCommon('search')}</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Input
+                  id="search"
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t('searchPlaceholder')}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 pt-2">
+            <Button
+              onClick={handleAutoTranslate}
+              disabled={translating || !targetLanguage}
+              className="bg-purple-600 hover:bg-purple-700"
+            >
+              {translating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {t('translating')}
+                </>
+              ) : (
+                <>
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  {t('autoTranslate')}
+                </>
+              )}
+            </Button>
+
+            <Button
+              onClick={handleSaveTranslations}
+              disabled={saving || translations.length === 0}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  {t('saving')}
+                </>
+              ) : (
+                <>
+                  <Save className="mr-2 h-4 w-4" />
+                  {t('saveTranslations')}
+                </>
+              )}
+            </Button>
+
+            {message && (
+              <div
+                className={`text-sm ${
+                  message.type === 'success' ? 'text-green-600' : 'text-red-600'
+                }`}
+              >
+                {message.text}
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Translations Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>
+            {t('entriesShowing').replace('{count}', String(filteredTranslations.length))}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-gray-400" />
+            </div>
+          ) : filteredTranslations.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">{t('noTranslations')}</div>
+          ) : (
+            <div className="space-y-3 max-h-[600px] overflow-y-auto">
+              {filteredTranslations.map((entry) => (
+                <div
+                  key={entry.key}
+                  className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 border rounded-lg hover:bg-gray-50"
+                >
+                  <div>
+                    <Label className="text-xs text-gray-500">{t('key')}</Label>
+                    <div className="font-mono text-sm text-gray-700 mt-1">{entry.key}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">{t('english')}</Label>
+                    <div className="text-sm text-gray-900 mt-1">{entry.english}</div>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-gray-500">{t('translated')}</Label>
+                    <Input
+                      value={entry.translated}
+                      onChange={(e) => updateTranslation(entry.key, e.target.value)}
+                      placeholder={entry.english}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

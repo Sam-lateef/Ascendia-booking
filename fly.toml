@@ -7,6 +7,9 @@ app = 'ascendia-booking'
 primary_region = 'iad'
 
 [build]
+  [build.args]
+    NEXT_PUBLIC_SUPABASE_URL = "https://vihlqoivkayhvxegytlc.supabase.co"
+    NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZpaGxxb2l2a2F5aHZ4ZWd5dGxjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQzNTkzNzYsImV4cCI6MjA3OTkzNTM3Nn0.UEhR1xu212-Y_0C1qk26bePnIM-MZ4wbC_aQavgWka8"
 
 [deploy]
   strategy = 'immediate'

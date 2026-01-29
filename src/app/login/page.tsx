@@ -15,13 +15,17 @@ export default function LoginPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('[LoginPage] Form submitted');
     setError('');
     setLoading(true);
 
     try {
+      console.log('[LoginPage] Calling signIn...');
       await signIn(email, password);
+      console.log('[LoginPage] Sign in successful, redirecting...');
       router.push('/admin/booking');
     } catch (err: any) {
+      console.error('[LoginPage] Sign in error:', err);
       setError(err.message || 'Failed to sign in');
     } finally {
       setLoading(false);

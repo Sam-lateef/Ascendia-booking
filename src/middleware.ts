@@ -13,11 +13,20 @@ import { createClient } from '@supabase/supabase-js';
 export async function middleware(request: NextRequest) {
   const res = NextResponse.next();
   
-  // If accessing root path, redirect to booking system
+  // If accessing root path, redirect based on authentication
   if (request.nextUrl.pathname === '/') {
-    return NextResponse.redirect(
-      new URL('/admin/booking', request.url)
-    );
+    // Check if user has a session (check for Supabase auth cookie)
+    const hasSession = request.cookies.get('sb-access-token') || 
+                       request.cookies.get('supabase-auth-token') ||
+                       request.cookies.has('currentOrgId');
+    
+    if (hasSession) {
+      // Logged in - go to admin dashboard
+      return NextResponse.redirect(new URL('/admin/booking', request.url));
+    } else {
+      // Not logged in - go to login page
+      return NextResponse.redirect(new URL('/login', request.url));
+    }
   }
   
   // Get Supabase credentials
@@ -36,36 +45,20 @@ export async function middleware(request: NextRequest) {
     },
   });
   
-  // Get session from request
-  const authHeader = request.headers.get('Authorization');
-  let session = null;
-  
-  if (authHeader) {
-    const token = authHeader.replace('Bearer ', '');
-    const { data } = await supabase.auth.getUser(token);
-    if (data.user) {
-      session = { user: data.user };
-    }
-  }
-  
-  // Protected routes (require authentication)
-  if (request.nextUrl.pathname.startsWith('/admin')) {
-    if (!session) {
-      // Redirect to login
-      const loginUrl = new URL('/login', request.url);
-      loginUrl.searchParams.set('redirect', request.nextUrl.pathname);
-      return NextResponse.redirect(loginUrl);
-    }
-    
+  // Protected routes - set organization context if available
+  if (request.nextUrl.pathname.startsWith('/admin') || request.nextUrl.pathname.startsWith('/api/admin')) {
     // Get organization context from cookie
     const orgId = request.cookies.get('currentOrgId')?.value;
     
-    // If no org context, allow the request to continue
-    // The OrganizationContext will handle loading orgs
     if (orgId) {
       // Set organization header for API routes
       res.headers.set('X-Organization-Id', orgId);
     }
+    
+    // Note: We're not enforcing auth in middleware because:
+    // 1. Client-side AuthContext handles auth state
+    // 2. OrganizationContext redirects to login if needed
+    // 3. Individual API routes check auth when needed
   }
   
   return res;

@@ -22,7 +22,9 @@ async function checkScheduleConflicts(
   endTime: string,
   providerId: number,
   operatoryId: number,
-  excludeScheduleId?: number
+  db: any,
+  excludeScheduleId?: number,
+  organizationId?: string
 ): Promise<{ type: string; message: string; conflictWith: any } | null> {
   
   // Get all schedules for the same date
@@ -30,6 +32,11 @@ async function checkScheduleConflicts(
     .from('provider_schedules')
     .select('*, providers(*)')
     .eq('schedule_date', scheduleDate);
+  
+  // CRITICAL: Filter by organization to prevent false conflicts from other orgs
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId);
+  }
   
   if (excludeScheduleId) {
     query = query.neq('id', excludeScheduleId);
@@ -104,8 +111,13 @@ async function checkScheduleConflicts(
 /**
  * Get all schedules with optional filters
  */
-export async function GetSchedules(parameters: Record<string, any> = {}, db: any = defaultDb): Promise<any[]> {
+export async function GetSchedules(parameters: Record<string, any> = {}, db: any = defaultDb, organizationId?: string): Promise<any[]> {
   let query = (db as any).from('provider_schedules').select('*, providers(*), operatories(*)');
+  
+  // CRITICAL: Filter by organization for multi-tenancy
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId);
+  }
   
   if (parameters.ProvNum || parameters.provider_id) {
     const providerId = parameters.ProvNum || parameters.provider_id;
@@ -158,7 +170,7 @@ export async function GetSchedules(parameters: Record<string, any> = {}, db: any
 /**
  * Get a single schedule by ID
  */
-export async function GetSchedule(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
+export async function GetSchedule(parameters: Record<string, any>, db: any = defaultDb, organizationId?: string): Promise<any> {
   const { ScheduleNum, id } = parameters;
   const scheduleId = ScheduleNum || id;
   
@@ -166,11 +178,17 @@ export async function GetSchedule(parameters: Record<string, any>, db: any = def
     throw new Error('ScheduleNum or id is required');
   }
   
-  const { data, error } = await (db as any)
+  let query = (db as any)
     .from('provider_schedules')
     .select('*, providers(*), operatories(*)')
-    .eq('id', scheduleId)
-    .single();
+    .eq('id', scheduleId);
+  
+  // CRITICAL: Filter by organization for multi-tenancy
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId);
+  }
+  
+  const { data, error } = await query.single();
   
   if (error) {
     throw new Error(`Failed to fetch schedule: ${error.message}`);
@@ -198,8 +216,9 @@ export async function GetSchedule(parameters: Record<string, any>, db: any = def
 /**
  * Create a new schedule
  */
-export async function CreateSchedule(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
+export async function CreateSchedule(parameters: Record<string, any>, db: any = defaultDb, organizationId?: string): Promise<any> {
   const { 
+    organization_id,
     ProvNum, 
     provider_id,
     OpNum,
@@ -266,7 +285,10 @@ export async function CreateSchedule(parameters: Record<string, any>, db: any = 
     startTime,
     endTime,
     providerId,
-    operatoryId
+    operatoryId,
+    db,
+    undefined,
+    organizationId
   );
   
   if (conflict) {
@@ -276,6 +298,7 @@ export async function CreateSchedule(parameters: Record<string, any>, db: any = 
   const { data, error } = await (db as any)
     .from('provider_schedules')
     .insert({
+      organization_id: organization_id,
       provider_id: providerId,
       operatory_id: operatoryId,
       schedule_date: scheduleDate,
@@ -308,7 +331,7 @@ export async function CreateSchedule(parameters: Record<string, any>, db: any = 
 /**
  * Update an existing schedule
  */
-export async function UpdateSchedule(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
+export async function UpdateSchedule(parameters: Record<string, any>, db: any = defaultDb, organizationId?: string): Promise<any> {
   const { ScheduleNum, id, ...updates } = parameters;
   const scheduleId = ScheduleNum || id;
   
@@ -317,11 +340,17 @@ export async function UpdateSchedule(parameters: Record<string, any>, db: any = 
   }
   
   // Get existing schedule for conflict checking
-  const { data: existing, error: fetchError } = await (db as any)
+  let query = (db as any)
     .from('provider_schedules')
     .select('*')
-    .eq('id', scheduleId)
-    .single();
+    .eq('id', scheduleId);
+  
+  // CRITICAL: Filter by organization for multi-tenancy
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId);
+  }
+  
+  const { data: existing, error: fetchError } = await query.single();
   
   if (fetchError || !existing) {
     throw new Error(`Schedule with ID ${scheduleId} not found`);
@@ -366,7 +395,9 @@ export async function UpdateSchedule(parameters: Record<string, any>, db: any = 
     finalEndTime,
     finalProviderId,
     finalOperatoryId,
-    scheduleId // Exclude current schedule from conflict check
+    db,
+    scheduleId, // Exclude current schedule from conflict check
+    organizationId
   );
   
   if (conflict) {
@@ -406,7 +437,7 @@ export async function UpdateSchedule(parameters: Record<string, any>, db: any = 
 /**
  * Delete a schedule
  */
-export async function DeleteSchedule(parameters: Record<string, any>, db: any = defaultDb): Promise<{ success: boolean; message: string }> {
+export async function DeleteSchedule(parameters: Record<string, any>, db: any = defaultDb, organizationId?: string): Promise<{ success: boolean; message: string }> {
   const { ScheduleNum, id } = parameters;
   const scheduleId = ScheduleNum || id;
   
@@ -414,10 +445,17 @@ export async function DeleteSchedule(parameters: Record<string, any>, db: any = 
     throw new Error('ScheduleNum or id is required');
   }
   
-  const { error } = await (db as any)
+  let query = (db as any)
     .from('provider_schedules')
     .delete()
     .eq('id', scheduleId);
+  
+  // CRITICAL: Filter by organization for multi-tenancy (prevents deleting other org's data)
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId);
+  }
+  
+  const { error } = await query;
   
   if (error) {
     throw new Error(`Failed to delete schedule: ${error.message}`);
@@ -432,7 +470,7 @@ export async function DeleteSchedule(parameters: Record<string, any>, db: any = 
 /**
  * Get schedules for a specific provider
  */
-export async function GetProviderSchedules(parameters: Record<string, any>, db: any = defaultDb): Promise<any[]> {
+export async function GetProviderSchedules(parameters: Record<string, any>, db: any = defaultDb, organizationId?: string): Promise<any[]> {
   const { ProvNum, provider_id, DateStart, DateEnd } = parameters;
   const providerId = ProvNum || provider_id;
   
@@ -444,14 +482,14 @@ export async function GetProviderSchedules(parameters: Record<string, any>, db: 
   if (DateStart) params.DateStart = DateStart;
   if (DateEnd) params.DateEnd = DateEnd;
   
-  return GetSchedules(params);
+  return GetSchedules(params, db, organizationId);
 }
 
 /**
  * Bulk create schedules for a date range (Mon-Fri or all days)
  * Creates schedules for each day in the range
  */
-export async function CreateDefaultSchedules(parameters: Record<string, any>, db: any = defaultDb): Promise<any[]> {
+export async function CreateDefaultSchedules(parameters: Record<string, any>, db: any = defaultDb, organizationId?: string): Promise<any[]> {
   const { 
     ProvNum, 
     provider_id,
@@ -518,8 +556,9 @@ export async function CreateDefaultSchedules(parameters: Record<string, any>, db
         ScheduleDate: dateStr,
         StartTime,
         EndTime,
-        IsActive: true
-      });
+        IsActive: true,
+        organization_id: organizationId
+      }, db, organizationId);
       created.push(schedule);
     } catch (e: any) {
       // Skip if conflict, but track the error
@@ -544,7 +583,7 @@ export async function CreateDefaultSchedules(parameters: Record<string, any>, db
 /**
  * Check for conflicts without creating
  */
-export async function CheckScheduleConflicts(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
+export async function CheckScheduleConflicts(parameters: Record<string, any>, db: any = defaultDb, organizationId?: string): Promise<any> {
   const { 
     ProvNum, 
     provider_id,
@@ -575,7 +614,9 @@ export async function CheckScheduleConflicts(parameters: Record<string, any>, db
     endTime,
     providerId,
     operatoryId,
-    ExcludeScheduleNum
+    db,
+    ExcludeScheduleNum,
+    organizationId
   );
   
   return {

@@ -185,6 +185,18 @@ interface Conversation {
   functionCallCount: number;
   functionCalls: FunctionCall[];
   outcome: 'completed' | 'in_progress' | 'abandoned';
+  transcript?: string;  // Retell transcript
+  recordingUrl?: string;  // Retell recording
+  durationMs?: number;  // Call duration in milliseconds
+  callAnalysis?: {
+    call_summary?: string;
+    in_voicemail?: boolean;
+    user_sentiment?: string;
+    call_successful?: boolean;
+    custom_analysis_data?: Record<string, any>;
+  };
+  publicLogUrl?: string;  // Retell debug log
+  disconnectionReason?: string;  // Why call ended
 }
 
 export default function CallsPage() {
@@ -202,7 +214,11 @@ export default function CallsPage() {
   const fetchConversations = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch(`/api/conversations?date=${selectedDate}`);
+      // If selectedDate is empty, fetch all conversations
+      const url = selectedDate 
+        ? `/api/conversations?date=${selectedDate}`
+        : `/api/conversations`;
+      const response = await fetch(url);
       const data = await response.json();
       setConversations(Array.isArray(data) ? data : []);
     } catch (error) {
@@ -230,13 +246,24 @@ export default function CallsPage() {
     }
   };
 
-  const formatDuration = (createdAt: string, updatedAt: string): string => {
+  const formatDuration = (createdAt: string, updatedAt: string, durationMs?: number): string => {
     try {
+      // Use actual call duration if available (from Retell)
+      if (durationMs) {
+        const minutes = Math.floor(durationMs / 1000 / 60);
+        const seconds = Math.floor((durationMs / 1000) % 60);
+        if (minutes === 0) {
+          return `${seconds}s`;
+        }
+        return `${minutes}m ${seconds}s`;
+      }
+      
+      // Fallback to timestamp difference
       const start = new Date(createdAt);
       const end = new Date(updatedAt);
-      const durationMs = end.getTime() - start.getTime();
-      const minutes = Math.floor(durationMs / 1000 / 60);
-      const seconds = Math.floor((durationMs / 1000) % 60);
+      const duration = end.getTime() - start.getTime();
+      const minutes = Math.floor(duration / 1000 / 60);
+      const seconds = Math.floor((duration / 1000) % 60);
       if (minutes === 0) {
         return `${seconds}s`;
       }
@@ -293,6 +320,45 @@ export default function CallsPage() {
     return (
       <Badge variant="outline" className={colors[intent] || 'bg-gray-100 text-gray-800'}>
         {intent}
+      </Badge>
+    );
+  };
+
+  const getSentimentBadge = (sentiment?: string) => {
+    if (!sentiment) return null;
+    
+    const colors: Record<string, string> = {
+      'Positive': 'bg-green-100 text-green-800',
+      'Neutral': 'bg-gray-100 text-gray-800',
+      'Negative': 'bg-red-100 text-red-800',
+    };
+    
+    const icons: Record<string, string> = {
+      'Positive': '😊',
+      'Neutral': '😐',
+      'Negative': '😞',
+    };
+    
+    return (
+      <Badge variant="outline" className={colors[sentiment] || 'bg-gray-100 text-gray-800'}>
+        <span className="mr-1">{icons[sentiment] || '📊'}</span>
+        {sentiment}
+      </Badge>
+    );
+  };
+
+  const getSuccessBadge = (successful?: boolean) => {
+    if (successful === undefined) return null;
+    
+    return successful ? (
+      <Badge className="bg-green-500">
+        <CheckCircle2 className="h-3 w-3 mr-1" />
+        Successful
+      </Badge>
+    ) : (
+      <Badge className="bg-orange-500">
+        <AlertCircle className="h-3 w-3 mr-1" />
+        Incomplete
       </Badge>
     );
   };
@@ -356,6 +422,13 @@ export default function CallsPage() {
             className="w-full sm:w-48"
           />
         </div>
+        <Button 
+          variant="outline" 
+          onClick={() => setSelectedDate('')}
+          className="w-full sm:w-auto"
+        >
+          Show All
+        </Button>
         <Button onClick={fetchConversations} className="w-full sm:w-auto">
           Refresh
         </Button>
@@ -433,7 +506,7 @@ export default function CallsPage() {
                   <TableCell>{getIntentBadge(conv.intent)}</TableCell>
                   <TableCell>{conv.messageCount}</TableCell>
                   <TableCell className="text-gray-600">
-                    {formatDuration(conv.createdAt, conv.updatedAt)}
+                    {formatDuration(conv.createdAt, conv.updatedAt, conv.durationMs)}
                   </TableCell>
                   <TableCell>{getOutcomeBadge(conv.outcome)}</TableCell>
                   <TableCell>
@@ -490,7 +563,7 @@ export default function CallsPage() {
                 <div>
                   <span className="font-medium text-gray-700">{tCommon('duration')}</span>
                   <span className="text-gray-900">
-                    {formatDuration(conv.createdAt, conv.updatedAt)}
+                    {formatDuration(conv.createdAt, conv.updatedAt, conv.durationMs)}
                   </span>
                 </div>
               </div>
@@ -518,17 +591,33 @@ export default function CallsPage() {
             </DialogTitle>
             <DialogDescription>
               {selectedConversation && (
-                <span>
-                  {formatTime(selectedConversation.createdAt)} • 
-                  {selectedConversation.messageCount} messages • 
-                  {formatDuration(selectedConversation.createdAt, selectedConversation.updatedAt)}
-                </span>
+                <div className="flex flex-wrap gap-2 items-center">
+                  <span>
+                    {formatTime(selectedConversation.createdAt)} • 
+                    {selectedConversation.messageCount} messages • 
+                    {formatDuration(selectedConversation.createdAt, selectedConversation.updatedAt, selectedConversation.durationMs)}
+                  </span>
+                  {selectedConversation.callAnalysis && (
+                    <>
+                      {getSentimentBadge(selectedConversation.callAnalysis.user_sentiment)}
+                      {getSuccessBadge(selectedConversation.callAnalysis.call_successful)}
+                    </>
+                  )}
+                </div>
               )}
             </DialogDescription>
           </DialogHeader>
           
           {selectedConversation && (
             <div className="flex-1 overflow-y-auto space-y-4 py-4">
+              {/* Call Summary (if available from Retell) */}
+              {selectedConversation.callAnalysis?.call_summary && (
+                <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="text-sm font-semibold text-blue-900 mb-2">📝 Call Summary</div>
+                  <p className="text-sm text-blue-800">{selectedConversation.callAnalysis.call_summary}</p>
+                </div>
+              )}
+
               {/* Call Info */}
               <div className="grid grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg">
                 <div>
@@ -559,17 +648,107 @@ export default function CallsPage() {
                     <div className="font-medium">{selectedConversation.appointmentDate}</div>
                   </div>
                 )}
+                {selectedConversation.disconnectionReason && (
+                  <div>
+                    <div className="text-xs text-gray-500">Ended By</div>
+                    <div className="font-medium text-gray-700">
+                      {selectedConversation.disconnectionReason.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    </div>
+                  </div>
+                )}
+                {selectedConversation.callAnalysis?.in_voicemail !== undefined && (
+                  <div>
+                    <div className="text-xs text-gray-500">Voicemail</div>
+                    <div className="font-medium">
+                      {selectedConversation.callAnalysis.in_voicemail ? (
+                        <Badge variant="outline" className="bg-yellow-100 text-yellow-800">Yes</Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-green-100 text-green-800">No</Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Messages */}
-              <div className="space-y-2">
-                <div className="text-sm font-semibold text-gray-700">{tCommon('conversation')}</div>
-                <div className="space-y-3 max-h-96 overflow-y-auto p-4 border rounded-lg bg-white">
-                  {selectedConversation.messages.length === 0 ? (
-                    <div className="text-center text-gray-500 py-4">
-                      No messages recorded
+              {/* Custom Analysis Data (from Retell) */}
+              {selectedConversation.callAnalysis?.custom_analysis_data && 
+                Object.keys(selectedConversation.callAnalysis.custom_analysis_data).length > 0 && (
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold text-gray-700">Custom Analysis</div>
+                  <div className="grid grid-cols-2 gap-3 p-3 border rounded-lg bg-white text-sm">
+                    {Object.entries(selectedConversation.callAnalysis.custom_analysis_data).map(([key, value]) => (
+                      <div key={key}>
+                        <div className="text-xs text-gray-500 capitalize">{key}</div>
+                        <div className="font-medium text-gray-900">
+                          {value === 0 || value === '' || value === null ? '-' : String(value)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Audio Recording (for Retell calls) */}
+              {selectedConversation.recordingUrl && (
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold text-gray-700">🎵 Call Recording</div>
+                  <div className="p-4 border rounded-lg bg-white">
+                    <audio 
+                      controls 
+                      className="w-full"
+                      src={selectedConversation.recordingUrl}
+                    >
+                      Your browser does not support the audio element.
+                    </audio>
+                    <div className="mt-2 text-xs text-gray-500">
+                      <a
+                        href={selectedConversation.recordingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline"
+                      >
+                        Download Recording
+                      </a>
+                      {selectedConversation.publicLogUrl && (
+                        <>
+                          <span className="mx-2">•</span>
+                          <a
+                            href={selectedConversation.publicLogUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 hover:underline"
+                          >
+                            View Debug Log
+                          </a>
+                        </>
+                      )}
                     </div>
-                  ) : (
+                  </div>
+                </div>
+              )}
+
+              {/* Transcript (for Retell calls) */}
+              {selectedConversation.transcript && (
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold text-gray-700">📝 Call Transcript</div>
+                  <div className="max-h-96 overflow-y-auto p-4 border rounded-lg bg-white">
+                    <pre className="whitespace-pre-wrap text-sm text-gray-900 font-sans leading-relaxed">
+                      {selectedConversation.transcript}
+                    </pre>
+                  </div>
+                </div>
+              )}
+
+              {/* Messages (for non-Retell channels) */}
+              {!selectedConversation.transcript && (
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold text-gray-700">{tCommon('conversation')}</div>
+                  <div className="space-y-3 max-h-96 overflow-y-auto p-4 border rounded-lg bg-white">
+                    {selectedConversation.messages.length === 0 ? (
+                      <div className="text-center text-gray-500 py-4">
+                        No messages recorded
+                      </div>
+                    ) : (
                     selectedConversation.messages.map((msg, idx) => (
                       <div
                         key={idx}
@@ -598,6 +777,7 @@ export default function CallsPage() {
                   )}
                 </div>
               </div>
+              )}
 
               {/* Actions Taken */}
               {selectedConversation.functionCalls && selectedConversation.functionCalls.length > 0 && (

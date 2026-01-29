@@ -1,0 +1,65 @@
+CORRECTED GETAVAILABLESLOTS SECTION
+═══════════════════════════════════════════════════════════════════════════════
+
+Replace this section in your instructions:
+
+OLD (WRONG):
+═══════════════════════════════════════════════════════════════════════════════
+AVAILABLE FUNCTIONS:
+- GetAvailableSlots(dateStart, dateEnd, ProvNum, OpNum) → Find available time slots
+
+GetAvailableSlots:
+  - { dateStart: "2025-12-10", dateEnd: "2025-12-10", ProvNum: 1, OpNum: 1 }
+═══════════════════════════════════════════════════════════════════════════════
+
+NEW (CORRECT):
+═══════════════════════════════════════════════════════════════════════════════
+AVAILABLE FUNCTIONS:
+- GetAvailableSlots(dateStart, dateEnd) → Find available time slots across ALL providers
+- GetAvailableSlots(dateStart, dateEnd, ProvNum, OpNum) → Find slots for specific provider/operatory
+
+GetAvailableSlots EXAMPLES:
+  Search ALL providers (RECOMMENDED):
+  - { dateStart: "2025-12-10", dateEnd: "2025-12-10" }
+  
+  Search specific provider:
+  - { dateStart: "2025-12-10", dateEnd: "2025-12-10", ProvNum: 1 }
+  
+  Search specific provider AND operatory:
+  - { dateStart: "2025-12-10", dateEnd: "2025-12-10", ProvNum: 1, OpNum: 1 }
+
+IMPORTANT: 
+- If no ProvNum/OpNum specified, the function searches ALL active provider schedules
+- This is usually better because it finds more available slots
+- Only specify ProvNum if the patient requests a specific doctor
+═══════════════════════════════════════════════════════════════════════════════
+
+UPDATED "FIND AVAILABLE TIMES" STEP IN BOOKING FLOW:
+═══════════════════════════════════════════════════════════════════════════════
+
+5. FIND AVAILABLE TIMES
+   
+   OPTION A - Patient has NO doctor preference (most common):
+   - Call GetAvailableSlots with ONLY dateStart and dateEnd
+   - Example: { dateStart: "2025-12-16", dateEnd: "2025-12-16" }
+   - This searches ALL available doctors and operatories
+   - Slots will include ProviderName, so you can tell the patient which doctor
+   
+   OPTION B - Patient wants SPECIFIC doctor:
+   - Use that doctor's ProvNum from get_office_context()
+   - Example: { dateStart: "2025-12-16", dateEnd: "2025-12-16", ProvNum: 1 }
+   - This only searches that doctor's schedules
+   
+   IF NO SLOTS AVAILABLE:
+   - Try next day: "That day is fully booked. How about [next date]?"
+   - Or suggest another doctor: "Dr. Smith is fully booked. Dr. Jones has availability - would you like to see them instead?"
+
+═══════════════════════════════════════════════════════════════════════════════
+
+KEY CHANGES:
+1. GetAvailableSlots does NOT require ProvNum/OpNum - they are OPTIONAL
+2. Calling with just { dateStart, dateEnd } searches ALL providers
+3. Only specify ProvNum if patient requests specific doctor
+4. The function is smart - it will automatically find all available slots
+
+This should fix the agent's ability to lookup available slots!

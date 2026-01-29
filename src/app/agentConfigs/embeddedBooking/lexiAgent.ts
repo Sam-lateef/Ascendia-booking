@@ -644,6 +644,7 @@ async function executeLexiTool(
       const response = await fetch(`${baseUrl}/api/booking`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // Important: Send cookies with request for authentication
         body: JSON.stringify({
           functionName: toolName,
           parameters: args,
@@ -938,6 +939,7 @@ const getMultiplePatientsRealtime = tool({
     const response = await fetch('/api/booking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // Important: Send cookies with request for authentication
       body: JSON.stringify({
         functionName: 'GetMultiplePatients',
         parameters: params,
@@ -987,6 +989,7 @@ const createPatientRealtime = tool({
     const response = await fetch('/api/booking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // Important: Send cookies with request for authentication
       body: JSON.stringify({
         functionName: 'CreatePatient',
         parameters: params,
@@ -1035,6 +1038,7 @@ const getAppointmentsRealtime = tool({
     const response = await fetch('/api/booking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // Important: Send cookies with request for authentication
       body: JSON.stringify({
         functionName: 'GetAppointments',
         parameters: params,
@@ -1084,6 +1088,7 @@ const getAvailableSlotsRealtime = tool({
     const response = await fetch('/api/booking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // Important: Send cookies with request for authentication
       body: JSON.stringify({
         functionName: 'GetAvailableSlots',
         parameters: params,
@@ -1134,6 +1139,7 @@ const createAppointmentRealtime = tool({
     const response = await fetch('/api/booking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // Important: Send cookies with request for authentication
       body: JSON.stringify({
         functionName: 'CreateAppointment',
         parameters: params,
@@ -1183,6 +1189,7 @@ const updateAppointmentRealtime = tool({
     const response = await fetch('/api/booking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // Important: Send cookies with request for authentication
       body: JSON.stringify({
         functionName: 'UpdateAppointment',
         parameters: params,
@@ -1229,6 +1236,7 @@ const breakAppointmentRealtime = tool({
     const response = await fetch('/api/booking', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include', // Important: Send cookies with request for authentication
       body: JSON.stringify({
         functionName: 'BreakAppointment',
         parameters: params,

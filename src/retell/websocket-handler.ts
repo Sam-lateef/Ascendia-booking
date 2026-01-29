@@ -7,7 +7,69 @@ import http from 'http';
 const NEXTJS_BASE_URL = process.env.NEXTJS_BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
 
 // Flag to control whether to use new workflow engine or legacy callGreetingAgent
-const USE_WORKFLOW_ENGINE = true;
+// DISABLED: /api/workflow route does not exist yet - using legacy callGreetingAgent
+const USE_WORKFLOW_ENGINE = false;
+
+// Channel configuration cache (since we can't use channelConfigLoader directly in standalone server)
+interface RetellChannelConfig {
+  enabled: boolean;
+  ai_backend: string;
+  data_integrations: string[];
+  instructions?: string;
+}
+
+// Default Retell config (GPT-4o since Retell handles TTS/STT)
+const DEFAULT_RETELL_CONFIG: RetellChannelConfig = {
+  enabled: true,
+  ai_backend: 'openai_gpt4o',
+  data_integrations: [],
+};
+
+// Cache channel configs per organization
+const channelConfigCache = new Map<string, { config: RetellChannelConfig; timestamp: number }>();
+const CACHE_TTL_MS = 60000; // 1 minute
+
+/**
+ * Fetch channel config from Next.js API
+ */
+async function getRetellChannelConfig(organizationId: string): Promise<RetellChannelConfig> {
+  const cacheKey = organizationId;
+  const cached = channelConfigCache.get(cacheKey);
+  
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL_MS) {
+    return cached.config;
+  }
+  
+  try {
+    const response = await fetch(`${NEXTJS_BASE_URL}/api/admin/channel-configs`, {
+      headers: {
+        'x-organization-id': organizationId,
+      },
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      const retellConfig = data.configs?.find((c: any) => c.channel === 'retell');
+      
+      if (retellConfig) {
+        const config: RetellChannelConfig = {
+          enabled: retellConfig.enabled ?? true,
+          ai_backend: retellConfig.ai_backend || 'openai_gpt4o',
+          data_integrations: retellConfig.data_integrations || [],
+          instructions: retellConfig.instructions,
+        };
+        
+        channelConfigCache.set(cacheKey, { config, timestamp: Date.now() });
+        console.log(`[Retell WS] Loaded channel config for org ${organizationId}:`, config);
+        return config;
+      }
+    }
+  } catch (error) {
+    console.error('[Retell WS] Failed to load channel config:', error);
+  }
+  
+  return DEFAULT_RETELL_CONFIG;
+}
 
 // Patch global fetch to use absolute URLs when running in Express server
 if (typeof global !== 'undefined' && typeof global.fetch === 'function') {
@@ -221,13 +283,15 @@ async function processWithWorkflowAPI(
 async function processWithLLMLegacy(
   userMessage: string,
   callId: string,
-  conversationHistory: any[]
+  conversationHistory: any[],
+  organizationId?: string
 ): Promise<{ text: string; shouldEndCall: boolean }> {
   try {
     // Dynamic import to avoid bundling issues when USE_WORKFLOW_ENGINE is true
-    const { callGreetingAgent } = await import('../app/agentConfigs/openDental/greetingAgentSTT');
+    // Use embeddedBooking config (internal database) - same as web chat and Twilio
+    const { callGreetingAgent } = await import('../app/agentConfigs/embeddedBooking/greetingAgentSTT');
     
-    console.log(`[Retell WS] Processing message for call ${callId}:`, userMessage);
+    console.log(`[Retell WS] Processing message for call ${callId} (org: ${organizationId || 'default'}):`, userMessage);
     
     // Create a working copy that will be modified by callGreetingAgent
     const workingHistory = [...conversationHistory];
@@ -242,12 +306,15 @@ async function processWithLLMLegacy(
     
     const isFirstMessage = conversationHistory.length === 0;
     
-    // Call our existing greeting agent
+    // Call our existing greeting agent with organization context and sessionId
+    const sessionId = `retell_${callId}`;
     const response = await callGreetingAgent(
       userMessage,
       workingHistory,
       isFirstMessage,
-      undefined
+      undefined,
+      organizationId,
+      sessionId
     );
     
     // Add assistant response to working history
@@ -281,19 +348,52 @@ async function processWithLLMLegacy(
 async function processWithLLM(
   userMessage: string,
   callId: string,
-  conversationHistory: any[]
+  conversationHistory: any[],
+  organizationId?: string
 ): Promise<{ text: string; shouldEndCall: boolean }> {
   if (USE_WORKFLOW_ENGINE) {
     return processWithWorkflowAPI(userMessage, callId, conversationHistory);
   } else {
-    return processWithLLMLegacy(userMessage, callId, conversationHistory);
+    return processWithLLMLegacy(userMessage, callId, conversationHistory, organizationId);
   }
 }
 
+// Store organization ID per call for channel config lookup
+const callOrgMap = new Map<string, string>();
+
+// Organization slug to ID mapping
+// TODO: Move this to database or environment variables for production
+const ORG_SLUG_MAP: Record<string, string> = {
+  'default': '', // Will use getCachedDefaultOrganizationId()
+  
+  // Your organizations (synced from database):
+  'test-a': '1c26bf4a-2575-45e3-82eb-9f58c899e2e7',
+  'nurai-clinic': '660d9ca6-b200-4c12-9b8d-af0a470d8b88',
+  'default-org': '00000000-0000-0000-0000-000000000001',
+  'admin': '9aa626ad-9a3e-4a79-a959-dda0a0b8b983',
+  'sam-lateeff': 'b445a9c7-af93-4b4a-a975-40d3f44178ec',
+};
+
 // WebSocket endpoint that Retell connects to
-expressWsInstance.app.ws('/llm-websocket/:call_id', (ws: RetellWebSocket, req: any) => {
-  const callId = req.params.call_id;
-  console.log(`[Retell WS] Connected for call: ${callId}`);
+// Supports both formats:
+// - /llm-websocket/:call_id (uses default org)
+// - /llm-websocket/:org_slug/:call_id (uses specified org)
+expressWsInstance.app.ws('/llm-websocket/:org_slug_or_call_id/:call_id?', async (ws: RetellWebSocket, req: any) => {
+  // Parse parameters - support both old and new format
+  let orgSlug: string;
+  let callId: string;
+  
+  if (req.params.call_id) {
+    // New format: /llm-websocket/:org_slug/:call_id
+    orgSlug = req.params.org_slug_or_call_id;
+    callId = req.params.call_id;
+    console.log(`[Retell WS] Connected for call: ${callId} (org slug: ${orgSlug})`);
+  } else {
+    // Old format: /llm-websocket/:call_id (backward compatible)
+    orgSlug = 'default';
+    callId = req.params.org_slug_or_call_id;
+    console.log(`[Retell WS] Connected for call: ${callId} (using default org)`);
+  }
   
   // Initialize WebSocket properties
   ws.callId = callId;
@@ -302,6 +402,86 @@ expressWsInstance.app.ws('/llm-websocket/:call_id', (ws: RetellWebSocket, req: a
   
   // Store this connection for text input API
   activeConnections.set(callId, ws);
+  
+  // Load channel configuration
+  let channelConfig = DEFAULT_RETELL_CONFIG;
+  try {
+    // Get organization ID from slug or use default
+    const { getCachedDefaultOrganizationId } = await import('../app/lib/callHelpers');
+    let orgId: string;
+    
+    if (orgSlug === 'default' || !ORG_SLUG_MAP[orgSlug]) {
+      orgId = await getCachedDefaultOrganizationId();
+      if (orgSlug !== 'default') {
+        console.warn(`[Retell WS] Unknown org slug '${orgSlug}', using default org`);
+      }
+    } else {
+      orgId = ORG_SLUG_MAP[orgSlug];
+      console.log(`[Retell WS] Using org ${orgId} from slug '${orgSlug}'`);
+    }
+    
+    if (orgId) {
+      callOrgMap.set(callId, orgId);
+      channelConfig = await getRetellChannelConfig(orgId);
+      
+      console.log(`[Retell WS] Channel config loaded for call ${callId}:`, {
+        enabled: channelConfig.enabled,
+        ai_backend: channelConfig.ai_backend,
+        data_integrations: channelConfig.data_integrations,
+      });
+      
+      // Check if channel is enabled
+      if (!channelConfig.enabled) {
+        console.log(`[Retell WS] ⚠️ Retell channel is disabled for org ${orgId}`);
+        // Continue anyway but log the warning
+      }
+      
+      // Create initial conversation record in database with correct org
+      // This ensures the webhook can find it and won't create a duplicate with wrong org
+      try {
+        const { getSupabaseAdmin } = await import('../app/lib/supabaseClient');
+        const supabase = getSupabaseAdmin();
+        
+        // Check if conversation already exists
+        const { data: existing } = await supabase
+          .from('conversations')
+          .select('id')
+          .eq('call_id', callId)
+          .single();
+        
+        if (!existing) {
+          // Create new conversation with correct org
+          const { data, error } = await supabase
+            .from('conversations')
+            .insert({
+              session_id: `retell_${callId}`,
+              organization_id: orgId,
+              channel: 'voice',
+              call_id: callId,
+              call_status: 'ongoing',
+              start_timestamp: Date.now(),
+              patient_info: {},
+              appointment_info: {},
+              missing_required: []
+            })
+            .select()
+            .single();
+          
+          if (error) {
+            console.error(`[Retell WS] Error creating conversation for call ${callId}:`, error);
+          } else {
+            console.log(`[Retell WS] ✅ Created conversation ${data.id} for call ${callId} in org ${orgId}`);
+          }
+        } else {
+          console.log(`[Retell WS] Conversation already exists for call ${callId}`);
+        }
+      } catch (error) {
+        console.error(`[Retell WS] Failed to create conversation for call ${callId}:`, error);
+      }
+    }
+  } catch (error) {
+    console.error('[Retell WS] Failed to load channel config:', error);
+  }
   
   // Send optional config on connection
   ws.send(JSON.stringify({
@@ -315,7 +495,11 @@ expressWsInstance.app.ws('/llm-websocket/:call_id', (ws: RetellWebSocket, req: a
   // Send initial greeting (or empty string to let user speak first)
   // We'll send the greeting through our LLM to maintain consistency
   if (ws.isFirstMessage) {
-    processWithLLM('Start the conversation with the greeting.', callId, ws.conversationHistory)
+    // Get org ID from callOrgMap for this call
+    const orgIdForGreeting = callOrgMap.get(callId);
+    console.log(`[Retell WS] Sending initial greeting for call ${callId}, org: ${orgIdForGreeting || 'default'}`);
+    
+    processWithLLM('Start the conversation with the greeting.', callId, ws.conversationHistory, orgIdForGreeting)
       .then((result) => {
         // Update ws.conversationHistory to sync with callHistoryMap
         // This ensures isFirstMessage is calculated correctly for subsequent messages
@@ -443,11 +627,15 @@ expressWsInstance.app.ws('/llm-websocket/:call_id', (ws: RetellWebSocket, req: a
           }, 1000); // Check every 1 second
           
           // STEP 2: Process with our LLM in background
+          // Get organization ID for this call
+          const orgIdForCall = callOrgMap.get(callId);
+          
           Promise.race([
             processWithLLM(
               userMessage,
               callId,
-              ws.conversationHistory || []
+              ws.conversationHistory || [],
+              orgIdForCall
             ),
             new Promise<{ text: string; shouldEndCall: boolean }>((_, reject) => 
               setTimeout(() => reject(new Error('LLM processing timeout')), 25000) // 25s max timeout

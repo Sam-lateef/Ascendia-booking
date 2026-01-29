@@ -549,6 +549,19 @@ export const lexiTools = [
 ];
 
 /**
+ * Channel context for tool execution
+ * Used to pass channel-specific settings to the booking API
+ */
+export interface ToolChannelContext {
+  /** Channel name (twilio, retell, whatsapp, web) */
+  channel: string;
+  /** Organization ID for multi-tenant API calls */
+  organizationId?: string;
+  /** Allowed data integrations for this channel */
+  dataIntegrations?: string[];
+}
+
+/**
  * Execute Lexi's tools (handles ALL functions directly)
  * Exported for use in Twilio WebSocket handler
  */
@@ -557,7 +570,8 @@ export async function executeLexiTool(
   args: any,
   conversationHistory: any[],
   sessionId: string,
-  playOneMomentAudio?: () => Promise<void>
+  playOneMomentAudio?: () => Promise<void>,
+  channelContext?: ToolChannelContext
 ): Promise<any> {
   switch (toolName) {
     // CONTEXT TOOLS
@@ -598,20 +612,40 @@ export async function executeLexiTool(
       }
       
       console.log(`[Lexi Twilio] 📞 Calling ${toolName} with params:`, args);
+      if (channelContext) {
+        console.log(`[Lexi Twilio] 📡 Channel: ${channelContext.channel}, Integrations: ${channelContext.dataIntegrations?.join(', ') || 'all'}`);
+      }
       
       // Call the booking API
       const baseUrl = typeof window !== 'undefined' 
         ? '' 
         : (process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000');
       
+      // Build headers - include X-Organization-Id for server-side calls (Twilio/Retell)
+      const headers: Record<string, string> = { 
+        'Content-Type': 'application/json'
+      };
+      
+      // For server-side calls, pass organization ID via header
+      // Extract from sessionId format: twilio_{callSid} or use channelContext
+      const orgId = channelContext?.organizationId || process.env.DEFAULT_ORGANIZATION_ID;
+      if (orgId) {
+        headers['X-Organization-Id'] = orgId;
+        console.log(`[Lexi Twilio] 🏢 Using org ID: ${orgId}`);
+      }
+      
       const response = await fetch(`${baseUrl}/api/booking`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
+        credentials: 'include', // Important: Send cookies with request for authentication
         body: JSON.stringify({
           functionName: toolName,
           parameters: args,
           sessionId,
-          conversationHistory
+          conversationHistory,
+          // Pass channel context for channel-aware sync
+          channel: channelContext?.channel,
+          dataIntegrations: channelContext?.dataIntegrations
         })
       });
       
@@ -639,12 +673,13 @@ export async function executeLexiTool(
  * Handle Lexi's response iterations (function calling loop)
  * Used for SMS processing
  */
-async function handleLexiIterations(
+export async function handleLexiIterations(
   body: any,
   response: any,
   conversationHistory: any[],
   sessionId: string,
-  playOneMomentAudio?: () => Promise<void>
+  playOneMomentAudio?: () => Promise<void>,
+  channelContext?: ToolChannelContext
 ): Promise<string> {
   let currentResponse = response;
   let iterations = 0;
@@ -698,7 +733,8 @@ async function handleLexiIterations(
           args,
           conversationHistory,
           sessionId,
-          playOneMomentAudio
+          playOneMomentAudio,
+          channelContext
         );
         const resultString = typeof result === 'string' ? result : JSON.stringify(result);
 
@@ -783,13 +819,17 @@ export async function callLexi(
   userMessage: string,
   conversationHistory: any[] = [],
   isFirstMessage: boolean = false,
-  playOneMomentAudio?: () => Promise<void>
+  playOneMomentAudio?: () => Promise<void>,
+  channelContext?: ToolChannelContext
 ): Promise<string> {
   console.log('[Lexi Twilio] User Message:', userMessage);
+  if (channelContext) {
+    console.log(`[Lexi Twilio] Channel: ${channelContext.channel}, Integrations: ${channelContext.dataIntegrations?.join(', ') || 'all'}`);
+  }
 
   try {
     const instructions = generateLexiInstructions();
-    const sessionId = `lexi_twilio_${Date.now()}`;
+    const sessionId = `twilio_${Date.now()}`;
 
     const cleanInput = conversationHistory
       .filter(item => item.type === 'message')
@@ -838,7 +878,8 @@ export async function callLexi(
       responseData,
       conversationHistory,
       sessionId,
-      playOneMomentAudio
+      playOneMomentAudio,
+      channelContext
     );
 
     return finalResponse;

@@ -56,6 +56,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     const { data: planData, error: planError } = await db
       .from('treatment_plans')
       .insert({
+        organization_id: context.organizationId,
         patient_id: body.patientId,
         total_price: body.totalPrice,
         total_duration: body.totalDuration,
@@ -74,6 +75,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Create treatment plan items
     const items = body.treatments.map(treatment => ({
+      organization_id: context.organizationId,
       treatment_plan_id: planData.id,
       tooth_fdi: treatment.toothFdi,
       surfaces: treatment.surfaces,

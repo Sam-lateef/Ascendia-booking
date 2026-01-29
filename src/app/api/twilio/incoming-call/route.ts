@@ -1,10 +1,17 @@
 /**
- * Twilio Incoming Call Handler - DYNAMIC MODE ROUTING
- * Automatically routes to Premium or Standard based on saved setting
+ * Twilio Incoming Call Handler - MULTI-TENANT ORGANIZATION ROUTING
+ * 
+ * Looks up organization from phone number (To field) for proper multi-tenant routing.
+ * Passes organization ID to WebSocket handler via URL parameter.
+ * 
+ * Based on lessons from Retell integration:
+ * - Organization routing is CRITICAL for multi-tenant support
+ * - Phone number → organization mapping prevents calls appearing in wrong org
+ * - WebSocket needs org context to load correct instructions and create conversation
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getAgentMode, getWebSocketUrlForMode } from '@/app/lib/agentMode';
+import { getOrganizationIdFromPhone } from '@/app/lib/callHelpers';
 
 export async function POST(req: NextRequest) {
   console.log('\n' + '='.repeat(70));
@@ -22,22 +29,60 @@ export async function POST(req: NextRequest) {
     console.log(`[Twilio Call] 📱 To: ${to}`);
     console.log(`[Twilio Call] 🆔 CallSid: ${callSid}`);
 
-    // Get current agent mode (Premium or Standard)
-    const mode = await getAgentMode();
-    const wsUrl = getWebSocketUrlForMode(mode);
+    // CRITICAL: Look up organization from phone number
+    // This ensures calls are routed to the correct tenant
+    let organizationId: string;
     
-    console.log(`[Twilio Call] 🎯 Mode: ${mode.toUpperCase()} (${mode === 'standard' ? 'cost-optimized' : 'full power'})`);
+    // Special handling for Twilio web client calls (testing)
+    // Web client calls show as "client:Anonymous" and don't have a 'To' number
+    if (from && from.startsWith('client:') && !to) {
+      // Route web client test calls to sam.lateeff's organization
+      organizationId = 'b445a9c7-af93-4b4a-a975-40d3f44178ec';
+      console.log(`[Twilio Call] 🧪 Web client test call - routing to sam.lateeff's org`);
+    } else {
+      // Real phone calls: lookup org from phone number
+      organizationId = await getOrganizationIdFromPhone(to);
+    }
+    
+    console.log(`[Twilio Call] 🏢 Organization: ${organizationId}`);
+
+    // Get WebSocket URL from environment
+    const baseWsUrl = process.env.TWILIO_WEBSOCKET_URL || 'wss://localhost:8080/twilio-media-stream';
+    
+    // Pass organization ID and call metadata to WebSocket via URL parameters
+    // This allows WebSocket handler to:
+    // 1. Load organization-specific instructions from DB
+    // 2. Create conversation record with correct org ID
+    // 3. Use proper Supabase client with org context (getSupabaseWithOrg)
+    // Build URL with only non-empty parameters to avoid issues with trailing empty params
+    const params = new URLSearchParams();
+    params.set('orgId', organizationId);
+    params.set('callSid', callSid);
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+    const wsUrl = `${baseWsUrl}?${params.toString()}`;
+    
+    console.log(`[Twilio Call] 🔌 WebSocket URL: ${baseWsUrl}`);
+    console.log(`[Twilio Call] 📋 Org ID passed to WebSocket: ${organizationId}`);
+    console.log(`[Twilio Call] 🔗 Full WS URL: ${wsUrl}`);
 
     // Return TwiML that connects to our WebSocket server for bidirectional audio streaming
+    // Using Parameter elements to pass metadata (sent in start message)
+    // This includes all call info so the WebSocket handler has full context
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
     <Connect>
-        <Stream url="${wsUrl}" />
+        <Stream url="${baseWsUrl}">
+            <Parameter name="orgId" value="${organizationId}" />
+            <Parameter name="callSid" value="${callSid}" />
+            <Parameter name="from" value="${from || ''}" />
+            <Parameter name="to" value="${to || ''}" />
+        </Stream>
     </Connect>
 </Response>`;
 
-    console.log(`[Twilio Call] 🔌 WebSocket URL: ${wsUrl}`);
     console.log(`[Twilio Call] ✅ Returning TwiML to connect audio stream`);
+    console.log(`[Twilio Call] 📄 TwiML:\n${twiml}`);
     console.log('='.repeat(70) + '\n');
 
     return new NextResponse(twiml, {
@@ -45,7 +90,7 @@ export async function POST(req: NextRequest) {
       status: 200,
     });
   } catch (error: any) {
-    console.error('[Twilio Call] Error:', error);
+    console.error('[Twilio Call] ❌ Error:', error);
     
     // Return error TwiML
     const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>

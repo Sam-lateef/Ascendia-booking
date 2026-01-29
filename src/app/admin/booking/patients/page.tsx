@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslations } from '@/lib/i18n/TranslationProvider';
 import { Button } from '@/components/ui/button';
+import { bookingRequest } from '@/app/lib/apiClient';
 import {
   Table,
   TableBody,
@@ -60,15 +61,7 @@ export default function PatientsPage() {
     try {
       setLoading(true);
       // Use GetAllPatients to fetch all patients without search parameters
-      const response = await fetch('/api/booking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          functionName: 'GetAllPatients',
-          parameters: {},
-        }),
-      });
-      const data = await response.json();
+      const data = await bookingRequest('GetAllPatients', {});
       setPatients(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching patients:', error);
@@ -91,15 +84,7 @@ export default function PatientsPage() {
         params.Phone = searchQuery.replace(/\D/g, '');
       }
 
-      const response = await fetch('/api/booking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          functionName: 'GetMultiplePatients',
-          parameters: params,
-        }),
-      });
-      const data = await response.json();
+      const data = await bookingRequest('GetMultiplePatients', params);
       setPatients(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching patients:', error);
@@ -117,28 +102,15 @@ export default function PatientsPage() {
     if (!confirm('Are you sure you want to delete this patient? This will also delete all their appointments.')) return;
 
     try {
-      const response = await fetch('/api/booking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          functionName: 'DeletePatient',
-          parameters: { PatNum: patNum },
-        }),
-      });
-
-      if (response.ok) {
-        if (searchQuery) {
-          fetchPatients();
-        } else {
-          fetchAllPatients();
-        }
+      await bookingRequest('DeletePatient', { PatNum: patNum });
+      if (searchQuery) {
+        fetchPatients();
       } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to delete patient');
+        fetchAllPatients();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting patient:', error);
-      alert('Error deleting patient');
+      alert(error.message || 'Error deleting patient');
     }
   };
 
@@ -153,31 +125,18 @@ export default function PatientsPage() {
         Email: formData.get('email'),
       };
 
-      const response = await fetch('/api/booking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          functionName: editingPatient ? 'UpdatePatient' : 'CreatePatient',
-          parameters: params,
-        }),
-      });
-
-      if (response.ok) {
-        setIsDialogOpen(false);
-        setEditingPatient(null);
-        // Reload patients after save
-        if (searchQuery) {
-          fetchPatients();
-        } else {
-          fetchAllPatients();
-        }
+      await bookingRequest(editingPatient ? 'UpdatePatient' : 'CreatePatient', params);
+      setIsDialogOpen(false);
+      setEditingPatient(null);
+      // Reload patients after save
+      if (searchQuery) {
+        fetchPatients();
       } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to save patient');
+        fetchAllPatients();
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving patient:', error);
-      alert('Error saving patient');
+      alert(error.message || 'Error saving patient');
     }
   };
 

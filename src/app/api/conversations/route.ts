@@ -11,9 +11,13 @@ import {
   getConversationsByDateExported,
   getAllConversationsExported
 } from '@/app/lib/conversationState';
+import { getCurrentOrganization } from '@/app/lib/apiHelpers';
 
 export async function GET(req: NextRequest) {
   try {
+    // Get organization context for multi-tenancy
+    const context = await getCurrentOrganization(req);
+    
     const { searchParams } = new URL(req.url);
     const date = searchParams.get('date');
     const source = searchParams.get('source'); // 'memory' to force in-memory only
@@ -26,10 +30,10 @@ export async function GET(req: NextRequest) {
         ? getConversationsByDateExported(date)
         : getAllConversationsExported();
     } else {
-      // Query from Supabase (includes in-memory fallback)
+      // Query from Supabase (includes in-memory fallback) with organization filtering
       conversations = date 
-        ? await getConversationsFromSupabase(date)
-        : await getAllConversationsFromSupabase();
+        ? await getConversationsFromSupabase(date, context.organizationId)
+        : await getAllConversationsFromSupabase(context.organizationId);
     }
     
     console.log(`[Conversations API] Returning ${conversations.length} conversations for date=${date || 'all'}`);

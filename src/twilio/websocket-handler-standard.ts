@@ -18,9 +18,11 @@ import {
   processMessage, 
   addMessage, 
   recordFunctionCall,
-  getOrCreateState 
+  getOrCreateState,
+  extractTimePreference,
 } from '@/app/lib/conversationState';
-import { getAgentInstructions } from '@/app/lib/agentMode';
+import { getCachedDefaultOrganizationId } from '@/app/lib/callHelpers';
+import { getChannelConfig } from '@/app/lib/channelConfigLoader';
 
 interface TwilioMessage {
   event: string;
@@ -434,6 +436,132 @@ const lexiTools = [
 ];
 
 // ============================================
+// SLOT SELECTION HELPER
+// ============================================
+
+/**
+ * Match a time mention in conversation to an available slot
+ * Handles formats like: "9 AM", "10:30", "2 PM", "nine o'clock", etc.
+ */
+function matchTimeToSlot(
+  text: string, 
+  slots: Array<{ AptDateTime: string; ProvNum: number; Op: number }>
+): { AptDateTime: string; ProvNum: number; Op: number } | null {
+  if (!text || !slots || slots.length === 0) return null;
+  
+  const lowerText = text.toLowerCase();
+  
+  // Parse various time formats from text
+  const timePatterns = [
+    /(\d{1,2}):(\d{2})\s*(am|pm)?/i,  // 10:30, 10:30 AM
+    /(\d{1,2})\s*(am|pm)/i,            // 10 AM, 2 PM
+    /(nine|ten|eleven|twelve|one|two|three|four|five|six|seven|eight)\s*(am|pm)?/i,  // nine AM
+  ];
+  
+  const wordToNumber: Record<string, number> = {
+    'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5, 'six': 6,
+    'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10, 'eleven': 11, 'twelve': 12
+  };
+  
+  let targetHour: number | null = null;
+  let targetMinute = 0;
+  
+  // Try to extract time from text
+  for (const pattern of timePatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      if (match[1] && /^\d+$/.test(match[1])) {
+        // Numeric hour
+        targetHour = parseInt(match[1]);
+        targetMinute = match[2] ? parseInt(match[2]) : 0;
+        
+        // Handle AM/PM
+        const ampm = match[3]?.toLowerCase() || match[2]?.toLowerCase();
+        if (ampm === 'pm' && targetHour < 12) targetHour += 12;
+        if (ampm === 'am' && targetHour === 12) targetHour = 0;
+      } else if (match[1]) {
+        // Word hour
+        const wordHour = match[1].toLowerCase();
+        targetHour = wordToNumber[wordHour] || null;
+        
+        if (targetHour !== null) {
+          const ampm = match[2]?.toLowerCase();
+          if (ampm === 'pm' && targetHour < 12) targetHour += 12;
+          if (ampm === 'am' && targetHour === 12) targetHour = 0;
+        }
+      }
+      
+      if (targetHour !== null) break;
+    }
+  }
+  
+  // If we found a time, match it to a slot
+  if (targetHour !== null) {
+    // Try exact match first
+    for (const slot of slots) {
+      const slotDate = new Date(slot.AptDateTime);
+      const slotHour = slotDate.getHours();
+      const slotMinute = slotDate.getMinutes();
+      
+      if (slotHour === targetHour && slotMinute === targetMinute) {
+        console.log(`[Slot Matcher] 🎯 Exact match: ${targetHour}:${targetMinute.toString().padStart(2, '0')} → ${slot.AptDateTime}`);
+        return slot;
+      }
+    }
+    
+    // Try hour-only match (ignore minutes)
+    for (const slot of slots) {
+      const slotDate = new Date(slot.AptDateTime);
+      const slotHour = slotDate.getHours();
+      
+      if (slotHour === targetHour) {
+        console.log(`[Slot Matcher] 🎯 Hour match: ${targetHour}:xx → ${slot.AptDateTime}`);
+        return slot;
+      }
+    }
+  }
+  
+  // Fallback: look for keywords like "first", "second", "last"
+  if (lowerText.includes('first') || lowerText.includes('1st')) {
+    console.log('[Slot Matcher] 🎯 Keyword match: first slot');
+    return slots[0];
+  }
+  if (lowerText.includes('second') || lowerText.includes('2nd')) {
+    console.log('[Slot Matcher] 🎯 Keyword match: second slot');
+    return slots[1] || slots[0];
+  }
+  if (lowerText.includes('last')) {
+    console.log('[Slot Matcher] 🎯 Keyword match: last slot');
+    return slots[slots.length - 1];
+  }
+  
+  // Check for "morning", "afternoon", "evening"
+  if (lowerText.includes('morning')) {
+    const morningSlot = slots.find(s => {
+      const hour = new Date(s.AptDateTime).getHours();
+      return hour >= 6 && hour < 12;
+    });
+    if (morningSlot) {
+      console.log('[Slot Matcher] 🎯 Time period match: morning');
+      return morningSlot;
+    }
+  }
+  if (lowerText.includes('afternoon')) {
+    const afternoonSlot = slots.find(s => {
+      const hour = new Date(s.AptDateTime).getHours();
+      return hour >= 12 && hour < 17;
+    });
+    if (afternoonSlot) {
+      console.log('[Slot Matcher] 🎯 Time period match: afternoon');
+      return afternoonSlot;
+    }
+  }
+  
+  console.log('[Slot Matcher] ❌ No match found for:', text.substring(0, 100));
+  return null;
+}
+
+// ============================================
 // CONNECTION STATE
 // ============================================
 
@@ -466,12 +594,46 @@ interface ConnectionState {
 /**
  * Handle a Twilio Media Stream WebSocket connection (Standard Mode)
  */
-function handleTwilioConnectionStandard(twilioWs: WebSocket) {
+async function handleTwilioConnectionStandard(twilioWs: WebSocket) {
   console.log('[Standard WS] 🟢 Client connected');
 
-  // Use hardcoded instructions for reliability (DB loading was causing async issues)
-  const receptionistInstructionsToUse = lexiChatInstructions;
-  const supervisorInstructionsToUse: string | undefined = undefined; // undefined = use default in supervisorAgent
+  // Load channel configuration and instructions
+  let receptionistInstructionsToUse = lexiChatInstructions; // Default hardcoded
+  let supervisorInstructionsToUse: string | undefined = undefined;
+  let dataIntegrations: string[] = [];
+  const modelName = 'gpt-4o-mini-realtime-preview-2024-12-17'; // Default for standard mode
+
+  try {
+    const defaultOrgId = await getCachedDefaultOrganizationId();
+    if (defaultOrgId) {
+      // Load channel configuration
+      const channelConfig = await getChannelConfig(defaultOrgId, 'twilio');
+      
+      // Check if enabled
+      if (!channelConfig.enabled) {
+        console.log('[Standard WS] ⚠️ Twilio channel is disabled for this organization');
+      }
+      
+      // Store data integrations
+      dataIntegrations = channelConfig.data_integrations || [];
+      
+      // Log channel config
+      console.log(`[Standard WS] 📋 Channel config: backend=${channelConfig.ai_backend}, integrations=${dataIntegrations.join(',') || 'none'}`);
+      
+      // Use channel-specific instructions (already has fallback logic in DB view)
+      if (channelConfig.instructions) {
+        // For two-agent mode, split instructions by sections if available
+        // Otherwise use same instructions for both agents
+        receptionistInstructionsToUse = channelConfig.instructions;
+        supervisorInstructionsToUse = channelConfig.instructions;
+        console.log('[Standard WS] 📋 Using DB instructions from channel config');
+      } else {
+        console.log('[Standard WS] 📋 Using hardcoded instructions (no DB config found)');
+      }
+    }
+  } catch (error) {
+    console.warn('[Standard WS] ⚠️ Failed to load config, using hardcoded:', error);
+  }
 
   const state: ConnectionState = {
     streamSid: null,
@@ -492,9 +654,7 @@ function handleTwilioConnectionStandard(twilioWs: WebSocket) {
   }
 
   try {
-    // Use gpt-4o-mini-realtime for cost optimization
-    // Model: gpt-4o-mini-realtime-preview-2024-12-17 (verified December 2024)
-    const modelName = 'gpt-4o-mini-realtime-preview-2024-12-17';
+    // Standard mode always uses gpt-4o-mini-realtime for cost optimization
     console.log(`[Standard WS] 🔌 Connecting to OpenAI Realtime with model: ${modelName}`);
     
     state.openaiWs = new WebSocket(
@@ -612,6 +772,27 @@ function handleTwilioConnectionStandard(twilioWs: WebSocket) {
               const args = JSON.parse(response.arguments);
               let context = args.relevantContextFromLastUserMessage || '';
 
+              // CRITICAL: Check if patient just chose a time (before building state context)
+              if (state.bookingState.availableSlots && !state.bookingState.selectedSlot && !state.bookingState.aptNum) {
+                const lastUserMessage = state.conversationHistory.filter(m => m.role === 'user').pop()?.content || '';
+                const matchedSlot = matchTimeToSlot(lastUserMessage, state.bookingState.availableSlots);
+                if (matchedSlot) {
+                  state.bookingState.selectedSlot = matchedSlot;
+                  console.log('[Standard WS] 🎯 Patient chose time from conversation:', matchedSlot.AptDateTime);
+                  
+                  // CRITICAL: Sync to ConversationState so booking API can auto-fill
+                  if (state.callSid) {
+                    const convState = getOrCreateState(`standard_${state.callSid}`);
+                    convState.appointment.selectedSlot = {
+                      dateTime: matchedSlot.AptDateTime,
+                      provNum: matchedSlot.ProvNum,
+                      opNum: matchedSlot.Op
+                    };
+                    console.log('[Standard WS] 🔄 Synced selectedSlot to ConversationState');
+                  }
+                }
+              }
+              
               // CRITICAL: Build booking state context to avoid duplicate operations
               const stateContext: string[] = [];
               
@@ -629,7 +810,7 @@ function handleTwilioConnectionStandard(twilioWs: WebSocket) {
                 stateContext.push(`[Slots: ${JSON.stringify(state.bookingState.availableSlots.slice(0, 5))}]`);
               }
               if (state.bookingState.selectedSlot) {
-                stateContext.push(`[SELECTED SLOT: ${JSON.stringify(state.bookingState.selectedSlot)}]`);
+                stateContext.push(`[SELECTED SLOT: ${JSON.stringify(state.bookingState.selectedSlot)}] - USE THIS for CreateAppointment`);
               }
               if (state.bookingState.aptNum) {
                 stateContext.push(`[APPOINTMENT CREATED - AptNum: ${state.bookingState.aptNum}] - DO NOT call CreateAppointment again`);
@@ -660,6 +841,15 @@ function handleTwilioConnectionStandard(twilioWs: WebSocket) {
                   state.bookingState.firstName = createResult.FName;
                   state.bookingState.lastName = createResult.LName;
                   console.log('[Standard WS] 📋 Stored PatNum from CreatePatient:', state.bookingState.patNum);
+                  
+                  // CRITICAL: Sync to ConversationState so booking API can auto-fill
+                  if (state.callSid) {
+                    const convState = getOrCreateState(`standard_${state.callSid}`);
+                    convState.patient.patNum = createResult.PatNum;
+                    convState.patient.firstName = createResult.FName;
+                    convState.patient.lastName = createResult.LName;
+                    console.log('[Standard WS] 🔄 Synced PatNum to ConversationState');
+                  }
                 }
               }
               
@@ -673,6 +863,16 @@ function handleTwilioConnectionStandard(twilioWs: WebSocket) {
                   state.bookingState.phone = patients[0].WirelessPhone;
                   state.bookingState.patientLookedUp = true;
                   console.log('[Standard WS] 📋 Stored PatNum from GetMultiplePatients:', state.bookingState.patNum);
+                  
+                  // CRITICAL: Sync to ConversationState so booking API can auto-fill
+                  if (state.callSid) {
+                    const convState = getOrCreateState(`standard_${state.callSid}`);
+                    convState.patient.patNum = patients[0].PatNum;
+                    convState.patient.firstName = patients[0].FName;
+                    convState.patient.lastName = patients[0].LName;
+                    convState.patient.phone = patients[0].WirelessPhone;
+                    console.log('[Standard WS] 🔄 Synced patient info to ConversationState');
+                  }
                 }
               }
               
@@ -683,6 +883,25 @@ function handleTwilioConnectionStandard(twilioWs: WebSocket) {
                   state.bookingState.availableSlots = slots;
                   state.bookingState.slotsQueried = true;
                   console.log('[Standard WS] 📋 Stored', slots.length, 'available slots');
+                  
+                  // Auto-detect if patient chose a time in the conversation
+                  const lastUserMessage = state.conversationHistory.filter(m => m.role === 'user').pop()?.content || '';
+                  const selectedSlot = matchTimeToSlot(lastUserMessage, slots);
+                  if (selectedSlot) {
+                    state.bookingState.selectedSlot = selectedSlot;
+                    console.log('[Standard WS] 🎯 Auto-detected selected slot from conversation:', selectedSlot.AptDateTime);
+                    
+                    // CRITICAL: Sync to ConversationState so booking API can auto-fill
+                    if (state.callSid) {
+                      const convState = getOrCreateState(`standard_${state.callSid}`);
+                      convState.appointment.selectedSlot = {
+                        dateTime: selectedSlot.AptDateTime,
+                        provNum: selectedSlot.ProvNum,
+                        opNum: selectedSlot.Op
+                      };
+                      console.log('[Standard WS] 🔄 Synced selectedSlot to ConversationState');
+                    }
+                  }
                 }
               }
               

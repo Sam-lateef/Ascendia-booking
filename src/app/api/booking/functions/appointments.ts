@@ -5,13 +5,19 @@
 
 import { db as defaultDb } from '@/app/lib/db';
 import { openDentalConfig } from '@/app/agentConfigs/openDental/config';
+import type { SyncContext } from '@/app/lib/integrations/SyncManager';
 
 /**
  * Get appointments with filters
  * Supports: PatNum, DateStart, DateEnd, ProvNum, OpNum, status
  */
-export async function GetAppointments(parameters: Record<string, any>, db: any = defaultDb): Promise<any[]> {
+export async function GetAppointments(parameters: Record<string, any>, db: any = defaultDb, organizationId?: string): Promise<any[]> {
   let query = db.from('appointments').select('*, patients(*), providers(*), operatories(*)');
+  
+  // CRITICAL: Filter by organization for multi-tenancy
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId);
+  }
   
   // Apply filters
   if (parameters.PatNum) {
@@ -90,7 +96,7 @@ export async function GetAppointments(parameters: Record<string, any>, db: any =
  * 2. Gets existing appointments
  * 3. Calculates available 30-minute slots
  */
-export async function GetAvailableSlots(parameters: Record<string, any>, db: any = defaultDb): Promise<any[]> {
+export async function GetAvailableSlots(parameters: Record<string, any>, db: any = defaultDb, organizationId?: string): Promise<any[]> {
   const { dateStart, dateEnd, ProvNum, OpNum, lengthMinutes = 30, searchAll = false } = parameters || {};
   
   // Only dateStart and dateEnd are truly required
@@ -124,10 +130,10 @@ export async function GetAvailableSlots(parameters: Record<string, any>, db: any
     const operatoryId = parseInt(OpNum.toString());
     
     // Validate provider and operatory exist and are active
-    await validateProvider(providerId);
-    await validateOperatory(operatoryId);
+    await validateProvider(providerId, db);
+    await validateOperatory(operatoryId, db);
     
-    const result = await db
+    let query = db
       .from('provider_schedules')
       .select('*, providers(id, first_name, last_name)')
       .eq('provider_id', providerId)
@@ -135,6 +141,13 @@ export async function GetAvailableSlots(parameters: Record<string, any>, db: any
       .eq('is_active', true)
       .gte('schedule_date', dateStart)
       .lte('schedule_date', dateEnd);
+    
+    // CRITICAL: Filter by organization for multi-tenancy
+    if (organizationId) {
+      query = query.eq('organization_id', organizationId);
+    }
+    
+    const result = await query;
     
     // Add provider name to each schedule
     schedules = (result.data || []).map((s: any) => ({
@@ -153,12 +166,19 @@ export async function GetAvailableSlots(parameters: Record<string, any>, db: any
   
   // If no schedules found (or no provider/operatory specified), search ALL active schedules
   if (schedules.length === 0) {
-    const result = await db
+    let query = db
       .from('provider_schedules')
       .select('*, providers(id, first_name, last_name)')
       .eq('is_active', true)
       .gte('schedule_date', dateStart)
       .lte('schedule_date', dateEnd);
+    
+    // CRITICAL: Filter by organization for multi-tenancy
+    if (organizationId) {
+      query = query.eq('organization_id', organizationId);
+    }
+    
+    const result = await query;
     
     // Add provider name to each schedule
     schedules = (result.data || []).map((s: any) => ({
@@ -195,12 +215,19 @@ export async function GetAvailableSlots(parameters: Record<string, any>, db: any
   const bookedTimesMap = new Map<string, Set<string>>();
   
   // Fetch all appointments in date range (we'll filter by provider/operatory in processing)
-  const { data: allAppointments, error: aptError } = await db
+  let aptQuery = db
     .from('appointments')
     .select('*')
     .in('status', ['Scheduled'])
     .gte('appointment_datetime', startDateStr)
     .lte('appointment_datetime', endDateStr);
+  
+  // CRITICAL: Filter by organization for multi-tenancy
+  if (organizationId) {
+    aptQuery = aptQuery.eq('organization_id', organizationId);
+  }
+  
+  const { data: allAppointments, error: aptError } = await aptQuery;
   
   if (aptError) {
     throw new Error(`Failed to fetch appointments: ${aptError.message}`);
@@ -361,7 +388,7 @@ export async function GetAvailableSlots(parameters: Record<string, any>, db: any
  * Create new appointment
  */
 export async function CreateAppointment(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
-  const { PatNum, AptDateTime, Op, ProvNum, Note, Pattern, IsHygiene, AptStatus = 'Scheduled' } = parameters;
+  const { PatNum, AptDateTime, Op, ProvNum, Note, Pattern, IsHygiene, AptStatus = 'Scheduled', organization_id } = parameters;
   
   // Validate required fields
   if (!PatNum) {
@@ -380,14 +407,18 @@ export async function CreateAppointment(parameters: Record<string, any>, db: any
     throw new Error('Op (Operatory) is required');
   }
   
+  if (!organization_id) {
+    throw new Error('organization_id is required');
+  }
+  
   const patientId = parseInt(PatNum.toString());
   const providerId = parseInt(ProvNum.toString());
   const operatoryId = parseInt(Op.toString());
   
   // Validate all foreign keys exist and are valid
-  await validatePatient(patientId);
-  await validateProvider(providerId);
-  await validateOperatory(operatoryId);
+  await validatePatient(patientId, db);
+  await validateProvider(providerId, db);
+  await validateOperatory(operatoryId, db);
   
   // Parse datetime
   let appointmentDateTime: string;
@@ -401,32 +432,32 @@ export async function CreateAppointment(parameters: Record<string, any>, db: any
   const duration = Pattern ? calculateDurationFromPattern(Pattern) : 30;
   
   // Check for conflicts
-  const conflictCheck = await checkConflict(providerId, operatoryId, appointmentDateTime, duration);
+  const conflictCheck = await checkConflict(providerId, operatoryId, appointmentDateTime, duration, db);
   if (conflictCheck.hasConflict) {
     throw new Error(conflictCheck.message || 'Time slot conflict detected');
   }
   
-  const { data, error } = await db
-    .from('appointments')
-    .insert({
-      patient_id: patientId,
-      provider_id: providerId,
-      operatory_id: operatoryId,
-      appointment_datetime: appointmentDateTime,
-      duration_minutes: duration,
-      appointment_type: Note || 'General',
-      status: AptStatus,
-      notes: Note || ''
-    })
-    .select()
-    .single();
+  // Use SyncManager for dual-write support (local DB + external sync)
+  const { SyncManager } = await import('@/app/lib/integrations/SyncManager');
+  const syncManager = new SyncManager(organization_id);
   
-  if (error || !data) {
-    if (error?.code === '23505') { // Unique constraint violation
-      throw new Error('Time slot conflict: Appointment already exists at this time');
-    }
-    throw new Error(`Failed to create appointment: ${error?.message || 'No data returned'}`);
-  }
+  // Extract sync context from parameters (set by booking API route)
+  const syncContext: SyncContext | undefined = parameters.__syncContext;
+  
+  const appointmentData = {
+    organization_id: organization_id,
+    patient_id: patientId,
+    provider_id: providerId,
+    operatory_id: operatoryId,
+    appointment_datetime: appointmentDateTime,
+    duration_minutes: duration,
+    appointment_type: Note || 'General',
+    status: AptStatus,
+    notes: Note || ''
+  };
+  
+  // Pass sync context to SyncManager for channel-aware syncing
+  const data = await syncManager.createAppointment(appointmentData, syncContext);
   
   return {
     AptNum: data.id,
@@ -442,7 +473,7 @@ export async function CreateAppointment(parameters: Record<string, any>, db: any
 /**
  * Update appointment
  */
-export async function UpdateAppointment(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
+export async function UpdateAppointment(parameters: Record<string, any>, db: any = defaultDb, organizationId?: string): Promise<any> {
   const { AptNum, AppointmentId, AptDateTime, Op, ProvNum, AptStatus, Note } = parameters;
   const appointmentId = AptNum || AppointmentId;
   
@@ -450,8 +481,8 @@ export async function UpdateAppointment(parameters: Record<string, any>, db: any
     throw new Error('AptNum or AppointmentId is required');
   }
   
-  // Validate appointment exists
-  await validateAppointment(appointmentId);
+  // Validate appointment exists (with org filtering)
+  await validateAppointment(appointmentId, db, organizationId);
   
   const updateData: any = {};
   
@@ -464,14 +495,14 @@ export async function UpdateAppointment(parameters: Record<string, any>, db: any
   // Validate and update operatory if provided
   if (Op !== undefined) {
     const operatoryId = parseInt(Op.toString());
-    await validateOperatory(operatoryId);
+    await validateOperatory(operatoryId, db);
     updateData.operatory_id = operatoryId;
   }
   
   // Validate and update provider if provided
   if (ProvNum !== undefined) {
     const providerId = parseInt(ProvNum.toString());
-    await validateProvider(providerId);
+    await validateProvider(providerId, db);
     updateData.provider_id = providerId;
   }
   
@@ -496,6 +527,7 @@ export async function UpdateAppointment(parameters: Record<string, any>, db: any
         opId, 
         updateData.appointment_datetime, 
         duration,
+        db,
         appointmentId // Exclude current appointment
       );
       
@@ -505,10 +537,17 @@ export async function UpdateAppointment(parameters: Record<string, any>, db: any
     }
   }
   
-  const { data, error } = await db
+  let updateQuery = db
     .from('appointments')
     .update(updateData)
-    .eq('id', appointmentId)
+    .eq('id', appointmentId);
+  
+  // CRITICAL: Filter by organization for multi-tenancy
+  if (organizationId) {
+    updateQuery = updateQuery.eq('organization_id', organizationId);
+  }
+  
+  const { data, error } = await updateQuery
     .select()
     .single();
   
@@ -533,7 +572,7 @@ export async function UpdateAppointment(parameters: Record<string, any>, db: any
 /**
  * Break/Cancel appointment
  */
-export async function BreakAppointment(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
+export async function BreakAppointment(parameters: Record<string, any>, db: any = defaultDb, organizationId?: string): Promise<any> {
   const { AptNum, sendToUnscheduledList = true } = parameters;
   
   if (!AptNum) {
@@ -542,15 +581,21 @@ export async function BreakAppointment(parameters: Record<string, any>, db: any 
   
   const appointmentId = parseInt(AptNum.toString());
   
-  // Validate appointment exists
-  await validateAppointment(appointmentId);
+  // Validate appointment exists (with org filtering)
+  await validateAppointment(appointmentId, db, organizationId);
   
   // Check appointment status
-  const { data: appointment, error: fetchError } = await db
+  let fetchQuery = db
     .from('appointments')
     .select('status')
-    .eq('id', appointmentId)
-    .single();
+    .eq('id', appointmentId);
+  
+  // CRITICAL: Filter by organization for multi-tenancy
+  if (organizationId) {
+    fetchQuery = fetchQuery.eq('organization_id', organizationId);
+  }
+  
+  const { data: appointment, error: fetchError } = await fetchQuery.single();
   
   if (fetchError || !appointment) {
     throw new Error(`Appointment not found: ${fetchError?.message || 'No data returned'}`);
@@ -562,10 +607,17 @@ export async function BreakAppointment(parameters: Record<string, any>, db: any 
   
   const newStatus = sendToUnscheduledList ? 'Broken' : 'Cancelled';
   
-  const { data, error } = await db
+  let updateQuery = db
     .from('appointments')
     .update({ status: newStatus })
-    .eq('id', appointmentId)
+    .eq('id', appointmentId);
+  
+  // CRITICAL: Filter by organization for multi-tenancy
+  if (organizationId) {
+    updateQuery = updateQuery.eq('organization_id', organizationId);
+  }
+  
+  const { data, error } = await updateQuery
     .select()
     .single();
   
@@ -583,7 +635,7 @@ export async function BreakAppointment(parameters: Record<string, any>, db: any 
 /**
  * Delete appointment permanently
  */
-export async function DeleteAppointment(parameters: Record<string, any>, db: any = defaultDb): Promise<any> {
+export async function DeleteAppointment(parameters: Record<string, any>, db: any = defaultDb, organizationId?: string): Promise<any> {
   const { AptNum } = parameters;
   
   if (!AptNum) {
@@ -592,13 +644,20 @@ export async function DeleteAppointment(parameters: Record<string, any>, db: any
   
   const appointmentId = parseInt(AptNum.toString());
   
-  // Validate appointment exists
-  await validateAppointment(appointmentId);
+  // Validate appointment exists (with org filtering)
+  await validateAppointment(appointmentId, db, organizationId);
   
-  const { error } = await db
+  let deleteQuery = db
     .from('appointments')
     .delete()
     .eq('id', appointmentId);
+  
+  // CRITICAL: Filter by organization for multi-tenancy (prevents deleting other org's data)
+  if (organizationId) {
+    deleteQuery = deleteQuery.eq('organization_id', organizationId);
+  }
+  
+  const { error } = await deleteQuery;
   
   if (error) {
     throw new Error(`Failed to delete appointment: ${error.message}`);
@@ -612,7 +671,7 @@ export async function DeleteAppointment(parameters: Record<string, any>, db: any
 /**
  * Validate that a patient exists
  */
-async function validatePatient(patientId: number): Promise<void> {
+async function validatePatient(patientId: number, db: any): Promise<void> {
   const { data, error } = await db
     .from('patients')
     .select('id')
@@ -627,7 +686,7 @@ async function validatePatient(patientId: number): Promise<void> {
 /**
  * Validate that a provider exists and is active
  */
-async function validateProvider(providerId: number): Promise<void> {
+async function validateProvider(providerId: number, db: any): Promise<void> {
   const { data, error } = await db
     .from('providers')
     .select('id, is_active')
@@ -646,7 +705,7 @@ async function validateProvider(providerId: number): Promise<void> {
 /**
  * Validate that an operatory exists and is active
  */
-async function validateOperatory(operatoryId: number): Promise<void> {
+async function validateOperatory(operatoryId: number, db: any): Promise<void> {
   const { data, error } = await db
     .from('operatories')
     .select('id, is_active')
@@ -665,12 +724,18 @@ async function validateOperatory(operatoryId: number): Promise<void> {
 /**
  * Validate that an appointment exists
  */
-async function validateAppointment(appointmentId: number): Promise<void> {
-  const { data, error } = await db
+async function validateAppointment(appointmentId: number, db: any, organizationId?: string): Promise<void> {
+  let query = db
     .from('appointments')
     .select('id')
-    .eq('id', appointmentId)
-    .single();
+    .eq('id', appointmentId);
+  
+  // CRITICAL: Filter by organization for multi-tenancy
+  if (organizationId) {
+    query = query.eq('organization_id', organizationId);
+  }
+  
+  const { data, error } = await query.single();
   
   if (error || !data) {
     throw new Error(`Appointment with ID ${appointmentId} not found`);
@@ -703,6 +768,7 @@ async function checkConflict(
   operatoryId: number,
   datetime: string,
   durationMinutes: number,
+  db: any,
   excludeAptId?: number
 ): Promise<{ hasConflict: boolean; message?: string }> {
   const appointmentStart = new Date(datetime);

@@ -518,58 +518,103 @@ void main() {
             It's easier when you can talk to your apps and data.
           </div>
 
-          {/* inTest with loading dots - positioned above email input */}
+          {/* Call to Action Buttons */}
           <div
             className="absolute"
             style={{
-              bottom: '23vh',
+              bottom: '18vh',
               left: '50%',
               transform: 'translateX(-50%)',
-              color: 'rgba(153, 153, 153, 0.5)',
-              letterSpacing: '0.1em',
-              fontSize: '0.875rem',
-              fontFamily: 'Orbitron, sans-serif',
               display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
+              gap: '1.5rem',
+              alignItems: 'center'
             }}
           >
-            <span>inTest</span>
-            <span style={{ width: '3ch', display: 'inline-block', textAlign: 'left' }}>
-              {'.'.repeat(showDots)}
-            </span>
+            <a
+              href="/signup"
+              className="px-8 py-3 transition-all duration-300 hover:scale-105"
+              style={{
+                background: 'rgba(0, 255, 65, 0.15)',
+                color: '#00ff41',
+                border: '2px solid #00ff41',
+                fontSize: '1rem',
+                letterSpacing: '0.1em',
+                fontFamily: 'Orbitron, sans-serif',
+                fontWeight: '500',
+                textDecoration: 'none',
+                display: 'inline-block',
+                backdropFilter: 'blur(4px)',
+                boxShadow: '0 0 20px rgba(0, 255, 65, 0.3)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(0, 255, 65, 0.25)';
+                e.currentTarget.style.boxShadow = '0 0 30px rgba(0, 255, 65, 0.5)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(0, 255, 65, 0.15)';
+                e.currentTarget.style.boxShadow = '0 0 20px rgba(0, 255, 65, 0.3)';
+              }}
+            >
+              GET STARTED
+            </a>
+            
+            <a
+              href="/login"
+              className="px-8 py-3 transition-all duration-300 hover:scale-105"
+              style={{
+                background: 'rgba(45, 45, 45, 0.3)',
+                color: '#cccccc',
+                border: '2px solid rgba(102, 102, 102, 0.5)',
+                fontSize: '1rem',
+                letterSpacing: '0.1em',
+                fontFamily: 'Orbitron, sans-serif',
+                fontWeight: '500',
+                textDecoration: 'none',
+                display: 'inline-block',
+                backdropFilter: 'blur(4px)'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = '#ffdd44';
+                e.currentTarget.style.color = '#ffdd44';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'rgba(102, 102, 102, 0.5)';
+                e.currentTarget.style.color = '#cccccc';
+              }}
+            >
+              SIGN IN
+            </a>
           </div>
 
-          {/* Email input with submit button - transparent */}
+          {/* Email notification (optional) - smaller, below buttons */}
           <form 
             onSubmit={handleSubmit}
             className="w-full max-w-md px-4 mx-auto" 
-            style={{ position: 'absolute', bottom: '15vh', left: '50%', transform: 'translateX(-50%)' }}
+            style={{ position: 'absolute', bottom: '8vh', left: '50%', transform: 'translateX(-50%)' }}
           >
             <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
               <input
                 type="email"
-                placeholder={tCommon('tell_me_when_its_done')}
-                className="w-full px-6 py-4 text-center focus:outline-none transition-all"
+                placeholder="Get notified of updates"
+                className="w-full px-4 py-2 text-center focus:outline-none transition-all text-xs"
                 style={{
-                  background: 'rgba(45, 45, 45, 0.3)',
-                  color: '#cccccc',
-                  border: '1px solid rgba(62, 62, 62, 0.5)',
-                  fontSize: '0.75rem',
+                  background: 'rgba(45, 45, 45, 0.2)',
+                  color: '#999999',
+                  border: '1px solid rgba(62, 62, 62, 0.3)',
+                  fontSize: '0.65rem',
                   letterSpacing: '0.1em',
                   fontFamily: 'Orbitron, sans-serif',
                   backdropFilter: 'blur(4px)',
-                  paddingRight: '3.5rem'
+                  paddingRight: '3rem'
                 }}
                 onFocus={(e) => {
                   e.currentTarget.style.borderColor = '#00ff41';
-                  e.currentTarget.style.background = 'rgba(45, 45, 45, 0.4)';
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = 'rgba(62, 62, 62, 0.5)';
                   e.currentTarget.style.background = 'rgba(45, 45, 45, 0.3)';
                 }}
-                required
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = 'rgba(62, 62, 62, 0.3)';
+                  e.currentTarget.style.background = 'rgba(45, 45, 45, 0.2)';
+                }}
               />
               <button
                 type="submit"
@@ -578,9 +623,9 @@ void main() {
                   background: 'transparent',
                   border: 'none',
                   cursor: 'pointer',
-                  fontSize: '1.25rem',
-                  color: emailSent ? '#00ff41' : '#ffdd44',
-                  padding: '0.5rem',
+                  fontSize: '1rem',
+                  color: emailSent ? '#00ff41' : '#666666',
+                  padding: '0.25rem',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center'
@@ -589,7 +634,7 @@ void main() {
                   if (!emailSent) e.currentTarget.style.color = '#00ff41';
                 }}
                 onMouseLeave={(e) => {
-                  if (!emailSent) e.currentTarget.style.color = '#ffdd44';
+                  if (!emailSent) e.currentTarget.style.color = '#666666';
                 }}
               >
                 @

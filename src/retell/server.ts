@@ -12,11 +12,13 @@ dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 console.log('[WebSocket Server] Environment check:');
 console.log(`  - OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? '✓ Set' : '✗ Missing'}`);
 console.log(`  - RETELL_API_KEY: ${process.env.RETELL_API_KEY ? '✓ Set (for Retell)' : '✗ Missing (Retell disabled)'}`);
-console.log(`  - SUPABASE_URL: ${process.env.SUPABASE_URL ? '✓ Set' : '✗ Missing (calls won\'t be logged!)'}`);
-console.log(`  - SUPABASE_ANON_KEY: ${process.env.SUPABASE_ANON_KEY ? '✓ Set' : '✗ Missing (calls won\'t be logged!)'}`);
+console.log(`  - SUPABASE_URL: ${process.env.SUPABASE_URL ? '✓ Set' : '✗ Missing'}`);
+console.log(`  - SUPABASE_SERVICE_KEY: ${process.env.SUPABASE_SERVICE_KEY ? '✓ Set' : '✗ Missing (DB operations will fail!)'}`);
+console.log(`  - SUPABASE_ANON_KEY: ${process.env.SUPABASE_ANON_KEY ? '✓ Set' : '✗ Missing'}`);
 console.log(`  - BASE_URL: ${process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'Not set (using localhost:3000)'}`);
-if (!process.env.SUPABASE_URL || !process.env.SUPABASE_ANON_KEY) {
-  console.log('[WebSocket Server] ⚠️  WARNING: Call transcripts will NOT be saved without Supabase credentials!');
+if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
+  console.log('[WebSocket Server] ⚠️  WARNING: Database operations will fail without SUPABASE_URL and SUPABASE_SERVICE_KEY!');
+  console.log('[WebSocket Server] ⚠️  Agent instructions cannot be loaded from database!');
 }
 
 // Required environment variables:
@@ -48,7 +50,9 @@ setupHealthCheck(app);
 // Listen on 0.0.0.0 to accept external connections (required for Fly.io)
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`[WebSocket Server] Running on 0.0.0.0:${PORT}`);
-  console.log(`[WebSocket Server] Retell endpoint: ws://0.0.0.0:${PORT}/llm-websocket/:call_id`);
+  console.log(`[WebSocket Server] Retell endpoints:`);
+  console.log(`  - Default org: ws://0.0.0.0:${PORT}/llm-websocket/:call_id`);
+  console.log(`  - Multi-org:   ws://0.0.0.0:${PORT}/llm-websocket/:org_slug/:call_id`);
   console.log(`[WebSocket Server] Twilio Premium endpoint: ws://0.0.0.0:${PORT}/twilio-media-stream`);
   console.log(`[WebSocket Server] Twilio Standard endpoint: ws://0.0.0.0:${PORT}/twilio-media-stream-standard`);
   console.log(`[WebSocket Server] Ready to accept connections`);

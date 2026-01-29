@@ -161,6 +161,7 @@ export function getWebSocketUrlForMode(mode: AgentMode): string {
 /**
  * Get agent instructions from database
  * Returns default instructions if database is not available
+ * @deprecated Use getOrganizationInstructions() for per-org configs
  */
 export async function getAgentInstructions(): Promise<{
   premiumInstructions: string | null;
@@ -218,6 +219,104 @@ export async function getAgentInstructions(): Promise<{
       premiumInstructions: null,
       receptionistInstructions: null,
       supervisorInstructions: null,
+      useManualInstructions: false,
+    };
+  }
+}
+
+/**
+ * Get organization-specific agent instructions from database
+ * Falls back to system-wide config if org-specific config doesn't exist
+ * 
+ * @param organizationId - Organization UUID
+ * @param channel - Channel type (twilio, web, whatsapp)
+ * @returns Agent instructions for the organization and channel
+ */
+export async function getOrganizationInstructions(
+  organizationId: string,
+  channel: 'twilio' | 'web' | 'whatsapp'
+): Promise<{
+  premiumInstructions: string | null;
+  receptionistInstructions: string | null;
+  supervisorInstructions: string | null;
+  whatsappInstructions: string | null;
+  useManualInstructions: boolean;
+}> {
+  if (!supabaseUrl || !supabaseAnonKey) {
+    return {
+      premiumInstructions: null,
+      receptionistInstructions: null,
+      supervisorInstructions: null,
+      whatsappInstructions: null,
+      useManualInstructions: false,
+    };
+  }
+
+  try {
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+    
+    // Query org-specific config first, then fall back to system config
+    // Order by organization_id DESC NULLS LAST to prioritize org-specific over system
+    const { data, error } = await supabase
+      .from('agent_configurations')
+      .select('manual_ai_instructions, receptionist_instructions, supervisor_instructions, whatsapp_instructions, use_manual_instructions, organization_id')
+      .or(`organization_id.eq.${organizationId},organization_id.is.null`)
+      .eq('channel', channel)
+      .order('organization_id', { ascending: false, nullsLast: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      console.warn(`[AgentMode] Error fetching instructions for org ${organizationId}, channel ${channel}:`, error);
+      return {
+        premiumInstructions: null,
+        receptionistInstructions: null,
+        supervisorInstructions: null,
+        whatsappInstructions: null,
+        useManualInstructions: false,
+      };
+    }
+
+    if (!data) {
+      console.log(`[AgentMode] No config found for org ${organizationId}, channel ${channel} - will use hardcoded`);
+      return {
+        premiumInstructions: null,
+        receptionistInstructions: null,
+        supervisorInstructions: null,
+        whatsappInstructions: null,
+        useManualInstructions: false,
+      };
+    }
+
+    const isOrgSpecific = data.organization_id === organizationId;
+    const configSource = isOrgSpecific ? 'organization-specific' : 'system-wide';
+
+    const result = {
+      premiumInstructions: data.manual_ai_instructions,
+      receptionistInstructions: data.receptionist_instructions,
+      supervisorInstructions: data.supervisor_instructions,
+      whatsappInstructions: data.whatsapp_instructions,
+      useManualInstructions: data.use_manual_instructions || false,
+    };
+    
+    console.log(`[AgentMode] 📋 Instructions loaded (${configSource}):`, {
+      organizationId: isOrgSpecific ? organizationId : 'system',
+      channel,
+      useManualInstructions: result.useManualInstructions,
+      premiumLength: result.premiumInstructions?.length || 0,
+      receptionistLength: result.receptionistInstructions?.length || 0,
+      supervisorLength: result.supervisorInstructions?.length || 0,
+      whatsappLength: result.whatsappInstructions?.length || 0,
+    });
+    
+    return result;
+  } catch (error) {
+    console.warn('[AgentMode] Error fetching organization instructions:', error);
+    return {
+      premiumInstructions: null,
+      receptionistInstructions: null,
+      supervisorInstructions: null,
+      whatsappInstructions: null,
       useManualInstructions: false,
     };
   }

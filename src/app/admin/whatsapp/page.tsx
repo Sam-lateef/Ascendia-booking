@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { useOrganization } from '@/app/contexts/OrganizationContext';
 
 interface WhatsAppInstance {
   id: string;
@@ -33,55 +34,47 @@ export default function WhatsAppAdminPage() {
   const [instances, setInstances] = useState<WhatsAppInstance[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [currentOrgId, setCurrentOrgId] = useState<string>('');
   const [autoCreateAttempted, setAutoCreateAttempted] = useState(false);
   const { toast } = useToast();
+  const { currentOrganization } = useOrganization();
+  
+  const currentOrgId = currentOrganization?.id || '';
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (currentOrgId) {
+      loadData();
+    }
+  }, [currentOrgId]);
 
   const loadData = async (skipAutoCreate = false) => {
     try {
       setLoading(true);
       
-      // Load current org and instances
-      const [currentOrgRes, instancesRes] = await Promise.all([
-        fetch('/api/admin/current-org'),
-        fetch('/api/admin/whatsapp/instances'),
-      ]);
-
-      // Get current organization
-      let orgId = '';
-      if (currentOrgRes.ok) {
-        const currentOrgData = await currentOrgRes.json();
-        console.log('📡 Current org response:', currentOrgData);
-        
-        // API returns { success: true, organization: { id, name, ... } }
-        orgId = currentOrgData.organization?.id || '';
-        setCurrentOrgId(orgId);
-        console.log('✅ Current org ID extracted:', orgId);
-      } else {
-        console.error('❌ Failed to get current org, status:', currentOrgRes.status);
+      // Wait for organization to be loaded
+      if (!currentOrgId) {
+        console.log('⏳ Waiting for organization to load...');
+        setLoading(false);
+        return;
       }
-
+      
+      // Load instances
+      const instancesRes = await fetch('/api/admin/whatsapp/instances');
       const instancesData = await instancesRes.json();
       const allInstances = instancesData.instances || [];
       setInstances(allInstances);
       console.log('📦 All instances:', allInstances);
-      
-      console.log('📊 Found instances:', allInstances.length, 'for org:', orgId);
+      console.log('📊 Found instances:', allInstances.length, 'for org:', currentOrgId);
 
       // Auto-create instance if current org doesn't have one (only on first load)
-      if (orgId && !skipAutoCreate && !autoCreateAttempted) {
+      if (!skipAutoCreate && !autoCreateAttempted) {
         const orgHasInstance = allInstances.some((inst: WhatsAppInstance) => 
-          inst.organization_id === orgId
+          inst.organization_id === currentOrgId
         );
 
         if (!orgHasInstance && !creating) {
           console.log('📱 No instance found for current org, auto-creating...');
           setAutoCreateAttempted(true);
-          await autoCreateInstance(orgId);
+          await autoCreateInstance(currentOrgId);
         }
       }
     } catch (error) {

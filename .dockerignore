@@ -41,4 +41,13 @@ build
 **\next-env.d.ts
 **\todo.md
 
+# Documentation and backups (not needed in production)
+docs
+**\*.backup
+**\*.md
+!README.md
+
+# Scripts not needed in production
+scripts
+
 fly.toml

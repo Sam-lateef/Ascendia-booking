@@ -131,21 +131,22 @@ STEP 6 - After Patient Chooses and Confirms:
 - Extract: AptDateTime, ProvNum, Op from that specific slot object
 - **CRITICAL:** Use the EXACT Op (operatory ID) from the slot object - DO NOT guess or use a different operatory
 
-STEP 7 - Create Appointment with EXACT Slot Details (SKIP if AptNum in booking state!):
+STEP 7 - Create Appointment (SKIP if AptNum in booking state!):
 - **FIRST CHECK:** Is AptNum already in booking state? → BOOKING IS DONE, just confirm to patient
+- **IMPORTANT:** Patients choose provider and time, but rooms are AUTO-ASSIGNED (they don't choose rooms)
 - Call CreateAppointment with:
   * PatNum: from booking state (NOT from conversation - use the stored PatNum!)
-  * AptDateTime: EXACT DateTime from the chosen slot object (YYYY-MM-DD HH:mm:ss format)
-  * ProvNum: EXACT ProvNum from the chosen slot object
-  * Op: EXACT Op from the chosen slot object (this is critical - operatories must match the schedule)
+  * AptDateTime: The chosen date/time from patient selection (YYYY-MM-DD HH:mm:ss format)
+  * ProvNum: The provider ID from the slot they chose
+  * Op: Will be auto-filled to default room (operatory 1) - DON'T ask patient about room
   * Note: appointment type if mentioned
+- **NEVER ask the patient which room/operatory they want - this is handled automatically**
 
-**CRITICAL - OPERATORY HANDLING:**
-- If CreateAppointment fails with "Operatory X is not active":
-  * Find a DIFFERENT slot from GetAvailableSlots result that has a different Op
-  * Try the next available slot with an active operatory
-  * DO NOT retry the same operatory - it won't work
-  * Tell Lexi: "Let me try another room - one moment..."
+**CRITICAL - ROOM/OPERATORY HANDLING:**
+- Rooms (operatories) are AUTO-ASSIGNED - patients don't choose rooms
+- If CreateAppointment fails with operatory error, the system will auto-retry
+- NEVER ask patient: "Which room would you like?"
+- Just say: "Let me book that for you..." and proceed
 
 STEP 8 - Confirm to Patient:
 - "You're all set! I've booked your [type] with Dr. [Name] for [Day], [Date] at [Time]."
@@ -408,9 +409,11 @@ export async function executeSupervisorTool(
       // Use server-side BASE_URL for production, fallback to localhost for dev
       const baseUrl = process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
       
+      // Auth is handled automatically by FetchInterceptor (adds Authorization header)
       const response = await fetch(`${baseUrl}/api/booking`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
           functionName: toolName,
           parameters: args,
@@ -461,6 +464,7 @@ interface SupervisorResult {
  * @param conversationHistory - Array of conversation messages
  * @param contextFromLastMessage - Key context from the last user message
  * @param sessionId - Session ID for tracking
+ * @param customSupervisorInstructions - Optional custom instructions from DB
  * @returns Response to speak to the user
  */
 export async function callSupervisor(
@@ -646,6 +650,7 @@ async function fetchResponsesAPI(baseUrl: string, body: unknown): Promise<{
   const response = await fetch(`${baseUrl}/api/responses`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include', // Important: Send cookies with request for authentication
     body: JSON.stringify(body),
   });
 

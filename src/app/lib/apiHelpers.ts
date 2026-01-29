@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
-import { getSupabaseAdmin } from './supabaseClient';
+import { createClient } from '@supabase/supabase-js';
+import { getSupabaseAdmin, getSupabaseUrl, getSupabaseAnonKey } from './supabaseClient';
 
 /**
  * Interface for authenticated request context
@@ -23,19 +24,76 @@ export interface RequestContext {
 export async function getCurrentOrganization(request: NextRequest): Promise<RequestContext> {
   const supabase = getSupabaseAdmin();
   
-  // Get authorization token from header
-  const authHeader = request.headers.get('Authorization');
-  const token = authHeader?.replace('Bearer ', '') || '';
+  let accessToken: string | null = null;
   
-  if (!token) {
+  // Try Authorization header first (for API calls from Twilio/WhatsApp)
+  const authHeader = request.headers.get('Authorization');
+  const bearerToken = authHeader?.replace('Bearer ', '');
+  
+  if (bearerToken) {
+    accessToken = bearerToken;
+  } else {
+    // Try to get access token from Supabase auth cookies (for browser-based requests)
+    const cookies = request.cookies;
+    const allCookies = cookies.getAll();
+    
+    // Find the Supabase auth token cookie
+    const authCookie = allCookies.find(cookie => 
+      cookie.name.startsWith('sb-') && cookie.name.endsWith('-auth-token')
+    );
+    
+    if (authCookie?.value) {
+      try {
+        // Supabase cookies can be in different formats:
+        // 1. JSON array: ["access_token", "refresh_token"]
+        // 2. JSON object: { "access_token": "...", "refresh_token": "..." }
+        // 3. Base64-encoded JSON
+        let sessionData;
+        try {
+          // Try parsing as plain JSON first (most common)
+          sessionData = JSON.parse(authCookie.value);
+        } catch (jsonErr) {
+          // If that fails, try base64 decoding first
+          const decoded = Buffer.from(authCookie.value, 'base64').toString('utf-8');
+          sessionData = JSON.parse(decoded);
+        }
+        
+        // Extract access token based on format
+        if (Array.isArray(sessionData)) {
+          // Format: ["access_token", "refresh_token"]
+          accessToken = sessionData[0];
+        } else if (sessionData?.access_token) {
+          // Format: { "access_token": "...", "refresh_token": "..." }
+          accessToken = sessionData.access_token;
+        }
+      } catch (e) {
+        console.error('[API] Failed to parse auth cookie:', e);
+      }
+    }
+  }
+  
+  if (!accessToken) {
     throw new Error('Unauthorized: No token provided');
   }
   
-  // Get user from token
-  const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+  // Get auth user from access token
+  const { data: { user }, error: userError } = await supabase.auth.getUser(accessToken);
   
   if (userError || !user) {
     throw new Error('Unauthorized: Invalid token');
+  }
+  
+  const authUser = user;
+  
+  // Get user record from our users table
+  const { data: userRecord, error: userRecordError } = await supabase
+    .from('users')
+    .select('id')
+    .eq('auth_user_id', authUser.id)
+    .single();
+  
+  if (userRecordError || !userRecord) {
+    throw new Error('User record not found');
   }
   
   // Get organization ID from cookie or header
@@ -60,7 +118,7 @@ export async function getCurrentOrganization(request: NextRequest): Promise<Requ
         status
       )
     `)
-    .eq('user_id', user.id)
+    .eq('user_id', userRecord.id)
     .eq('organization_id', orgId)
     .eq('status', 'active')
     .single();
@@ -77,8 +135,8 @@ export async function getCurrentOrganization(request: NextRequest): Promise<Requ
   
   return {
     user: {
-      id: user.id,
-      email: user.email || '',
+      id: authUser.id,
+      email: authUser.email || '',
     },
     organizationId: orgId,
     role: membership.role,

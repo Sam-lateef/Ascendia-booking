@@ -8,6 +8,11 @@ import {
   recordFunctionCall,
   getOrCreateState 
 } from '@/app/lib/conversationState';
+// Organization-specific instructions
+import { getOrganizationInstructions } from '@/app/lib/agentMode';
+import { getCachedDefaultOrganizationId } from '@/app/lib/callHelpers';
+// Channel configuration
+import { getChannelConfig, isRealtimeBackend } from '@/app/lib/channelConfigLoader';
 
 interface TwilioMessage {
   event: string;
@@ -41,17 +46,36 @@ interface TwilioMessage {
 /**
  * Handle a Twilio Media Stream WebSocket connection
  * This is called by express-ws when a connection is established
+ * 
+ * @param twilioWs - WebSocket connection to Twilio
+ * @param orgId - Organization ID from URL parameters
+ * @param initialCallSid - Call SID from URL parameters
+ * @param fromNumber - Caller phone number
+ * @param toNumber - Called phone number (Twilio number)
  */
-function handleTwilioConnection(twilioWs: WebSocket) {
+async function handleTwilioConnection(
+  twilioWs: WebSocket,
+  orgId?: string | null,
+  initialCallSid?: string | null,
+  fromNumber?: string | null,
+  toNumber?: string | null
+) {
   console.log('[Twilio WS] 🟢 Client connected');
 
   let streamSid: string | null = null;
-  let callSid: string | null = null;
+  let callSid: string | null = initialCallSid || null;
   let openaiWs: WebSocket | null = null;
   let openaiReady = false;
   const audioQueue: string[] = [];
 
-  // Create OpenAI Realtime WebSocket
+  // These will be loaded after receiving start message with customParameters
+  let instructions = generateLexiInstructions(true); // Default hardcoded fallback
+  let organizationId: string = orgId || '';
+  let realtimeModel = 'gpt-4o-realtime-preview-2024-12-17'; // Default
+  let dataIntegrations: string[] = [];
+  let configLoaded = false;
+
+  // Check OpenAI API key early
   const openaiApiKey = process.env.OPENAI_API_KEY;
   if (!openaiApiKey) {
     console.error('[Twilio WS] ❌ OPENAI_API_KEY not configured');
@@ -59,22 +83,87 @@ function handleTwilioConnection(twilioWs: WebSocket) {
     return;
   }
 
-  try {
-    openaiWs = new WebSocket(
-      'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-12-17',
-      {
-        headers: {
-          'Authorization': `Bearer ${openaiApiKey}`,
-          'OpenAI-Beta': 'realtime=v1',
-        },
+  // Function to load channel config and connect to OpenAI
+  // This is called AFTER we have the organization ID from customParameters
+  async function initializeOpenAIConnection() {
+    if (configLoaded) {
+      console.log('[Twilio WS] ⚠️ Config already loaded, skipping');
+      return;
+    }
+    configLoaded = true;
+
+    try {
+      // Use provided org ID or fall back to default
+      if (!organizationId) {
+        organizationId = await getCachedDefaultOrganizationId();
+        console.warn('[Twilio WS] ⚠️ No org ID provided, using default:', organizationId);
+      } else {
+        console.log('[Twilio WS] 📋 Using org ID:', organizationId);
       }
-    );
+      
+      if (organizationId) {
+        // Check if Twilio channel is enabled
+        const channelConfig = await getChannelConfig(organizationId, 'twilio');
+        
+        if (!channelConfig.enabled) {
+          console.log('[Twilio WS] ⚠️ Twilio channel is disabled for this organization');
+        }
+        
+        // Store data integrations for tool execution
+        dataIntegrations = channelConfig.data_integrations || [];
+        
+        // Select realtime model based on channel config
+        if (channelConfig.ai_backend === 'openai_gpt4o_mini') {
+          realtimeModel = 'gpt-4o-mini-realtime-preview-2024-12-17';
+        } else {
+          realtimeModel = 'gpt-4o-realtime-preview-2024-12-17';
+        }
+        
+        console.log(`[Twilio WS] 📋 Channel config: backend=${channelConfig.ai_backend}, model=${realtimeModel}, integrations=${dataIntegrations.join(',') || 'none'}`);
+        
+        // Use channel-specific instructions from database
+        // Priority: one_agent_instructions > instructions (deprecated) > hardcoded
+        if (channelConfig.one_agent_instructions) {
+          instructions = channelConfig.one_agent_instructions;
+          console.log('[Twilio WS] 📋 Using one_agent_instructions from DB');
+        } else if (channelConfig.instructions) {
+          instructions = channelConfig.instructions;
+          console.log('[Twilio WS] 📋 Using deprecated instructions field from DB');
+        } else {
+          console.log('[Twilio WS] 📋 Using hardcoded instructions (no DB config found)');
+        }
+      }
+    } catch (error) {
+      console.warn('[Twilio WS] ⚠️ Failed to load config, using hardcoded:', error);
+    }
+
+    // NOW connect to OpenAI with correct config
+    try {
+      openaiWs = new WebSocket(
+        `wss://api.openai.com/v1/realtime?model=${realtimeModel}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${openaiApiKey}`,
+            'OpenAI-Beta': 'realtime=v1',
+          },
+        }
+      );
+
+      setupOpenAIHandlers();
+    } catch (error) {
+      console.error('[Twilio WS] ❌ Failed to create OpenAI connection:', error);
+      twilioWs.close();
+    }
+  }
+
+  // Setup OpenAI WebSocket event handlers
+  function setupOpenAIHandlers() {
+    if (!openaiWs) return;
 
     openaiWs.on('open', () => {
       console.log('[Twilio WS] ✅ Connected to OpenAI Realtime');
       
       // Configure session with g711_ulaw (no conversion needed!)
-      const instructions = generateLexiInstructions(true);
       const sessionUpdate = {
         type: 'session.update',
         session: {
@@ -84,13 +173,13 @@ function handleTwilioConnection(twilioWs: WebSocket) {
           input_audio_format: 'g711_ulaw',  // ✅ Native Twilio format - NO CONVERSION!
           output_audio_format: 'g711_ulaw', // ✅ Native Twilio format - NO CONVERSION!
           input_audio_transcription: {
-            model: 'gpt-4o-mini-transcribe',  // Updated to match official OpenAI implementation
+            model: 'gpt-4o-mini-transcribe',
           },
           turn_detection: {
             type: 'server_vad',
             threshold: 0.5,
             prefix_padding_ms: 300,
-            silence_duration_ms: 200,
+            silence_duration_ms: 500, // Increased from 200ms to let user finish speaking
           },
           tools: lexiTools.map(tool => ({
             type: 'function',
@@ -170,7 +259,13 @@ function handleTwilioConnection(twilioWs: WebSocket) {
               response.name,
               args,
               [],
-              `twilio_${callSid}`
+              `twilio_${callSid}`,
+              undefined, // playOneMomentAudio
+              { 
+                channel: 'twilio',
+                organizationId: organizationId,
+                dataIntegrations: dataIntegrations 
+              }
             );
 
             // Record function call to conversation state (auto-persists to Supabase)
@@ -261,12 +356,7 @@ function handleTwilioConnection(twilioWs: WebSocket) {
     openaiWs.on('close', () => {
       console.log('[Twilio WS] 🔴 OpenAI connection closed');
     });
-
-  } catch (error) {
-    console.error('[Twilio WS] ❌ Failed to create OpenAI connection:', error);
-    twilioWs.close();
-    return;
-  }
+  } // End of setupOpenAIHandlers
 
   // Keep-alive for Twilio (send mark every 20s)
   const keepAlive = setInterval(() => {
@@ -276,7 +366,7 @@ function handleTwilioConnection(twilioWs: WebSocket) {
   }, 20000);
 
   // Handle Twilio messages
-  twilioWs.on('message', (message: WebSocket.Data) => {
+  twilioWs.on('message', async (message: WebSocket.Data) => {
     try {
       const msg: TwilioMessage = JSON.parse(message.toString());
       // Only log start/stop events (keep logs minimal)
@@ -287,15 +377,80 @@ function handleTwilioConnection(twilioWs: WebSocket) {
       switch (msg.event) {
         case 'start':
           streamSid = msg.start!.streamSid;
-          callSid = msg.start!.callSid;
+          callSid = msg.start!.callSid || initialCallSid;
           console.log('[Twilio WS] 📞 Call started:', callSid);
           console.log('[Twilio WS] 🎵 Media format:', msg.start!.mediaFormat);
+          
+          // Extract custom parameters from TwiML <Parameter> elements
+          // These are sent in the start message's customParameters field
+          const customParams = (msg.start as any)?.customParameters || {};
+          console.log('[Twilio WS] 📋 Custom parameters:', JSON.stringify(customParams));
+          
+          // Use custom parameters - THESE ARE CRITICAL for multi-tenancy
+          if (customParams.orgId) {
+            organizationId = customParams.orgId;
+            console.log('[Twilio WS] 📋 Using orgId from customParameters:', organizationId);
+          }
+          if (customParams.callSid && !callSid) {
+            callSid = customParams.callSid;
+          }
+          if (customParams.from) {
+            fromNumber = customParams.from;
+            console.log('[Twilio WS] 📋 Caller number from customParameters:', fromNumber);
+          }
+          if (customParams.to) {
+            toNumber = customParams.to;
+            console.log('[Twilio WS] 📋 Called number from customParameters:', toNumber);
+          }
+          
+          // NOW initialize OpenAI connection with correct org context
+          // This loads channel config from DB and connects to OpenAI
+          await initializeOpenAIConnection();
           
           // Initialize conversation state for this call (creates DB entry)
           if (callSid) {
             const state = getOrCreateState(`twilio_${callSid}`);
             state.intent = 'unknown'; // Will be detected from conversation
             console.log('[Twilio WS] 📊 Conversation state initialized:', `twilio_${callSid}`);
+            
+            // Create conversation record in database with proper org context
+            // This mirrors the Retell implementation for consistency
+            try {
+              const { getSupabaseWithOrg } = await import('@/app/lib/supabaseClient');
+              const supabase = await getSupabaseWithOrg(organizationId);
+              
+              const { data, error } = await supabase
+                .from('conversations')
+                .insert({
+                  session_id: `twilio_${callSid}`,
+                  organization_id: organizationId,
+                  channel: 'voice',
+                  
+                  // Twilio fields
+                  call_id: callSid,
+                  from_number: fromNumber,
+                  to_number: toNumber,
+                  direction: 'inbound',
+                  start_timestamp: Date.now(),
+                  call_status: 'ongoing',
+                  
+                  // Initialize with empty structures
+                  patient_info: {},
+                  appointment_info: {},
+                  missing_required: []
+                })
+                .select()
+                .single();
+              
+              if (error) {
+                console.error('[Twilio WS] ❌ Error creating conversation:', error);
+              } else {
+                console.log(`[Twilio WS] ✅ Created conversation: ${data.id} for org: ${organizationId}`);
+              }
+            } catch (dbError) {
+              console.error('[Twilio WS] ❌ Database error:', dbError);
+              // Continue anyway - conversation state will still work in memory
+            }
           }
           break;
 
@@ -346,7 +501,28 @@ export function setupTwilioWebSocketHandler(expressWsApp: any) {
   // Register the websocket route using express-ws
   expressWsApp.ws('/twilio-media-stream', (ws: WebSocket, req: any) => {
     console.log('[Twilio WS] 🔌 New connection on /twilio-media-stream');
-    handleTwilioConnection(ws);
+    
+    // Extract query parameters from URL
+    // Format: /twilio-media-stream?orgId=xxx&callSid=xxx&from=xxx&to=xxx
+    const url = new URL(req.url, 'http://localhost');
+    const orgId = url.searchParams.get('orgId');
+    const callSid = url.searchParams.get('callSid');
+    const fromNumber = url.searchParams.get('from');
+    const toNumber = url.searchParams.get('to');
+    
+    console.log('[Twilio WS] 📋 Call metadata from URL:');
+    console.log(`  Org ID: ${orgId || 'NOT PROVIDED'}`);
+    console.log(`  Call SID: ${callSid || 'NOT PROVIDED'}`);
+    console.log(`  From: ${fromNumber || 'NOT PROVIDED'}`);
+    console.log(`  To: ${toNumber || 'NOT PROVIDED'}`);
+    
+    if (!orgId) {
+      console.error('[Twilio WS] ❌ No organization ID provided in URL parameters');
+      console.error('[Twilio WS] ❌ This will cause incorrect org routing!');
+      // Continue anyway with fallback, but log warning
+    }
+    
+    handleTwilioConnection(ws, orgId, callSid, fromNumber, toNumber);
   });
 
   console.log('[Twilio WS] ✅ Handler registered on /twilio-media-stream');

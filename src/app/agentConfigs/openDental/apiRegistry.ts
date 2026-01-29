@@ -1,5 +1,5 @@
 // Use validated registry (duplicates removed, tested against real API)
-import apiRegistryData from '../../../../docs/API/validated/validated_registry.json' assert { type: 'json' };
+import apiRegistryData from '../../../data/validated_registry.json' assert { type: 'json' };
 
 export interface EndpointInfo {
   function_name: string;

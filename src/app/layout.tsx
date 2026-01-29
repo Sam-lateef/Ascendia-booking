@@ -5,6 +5,7 @@ import { SuppressDevToolsError } from "./components/SuppressDevToolsError";
 import { TranslationProvider } from "../lib/i18n/TranslationProvider";
 import { AuthProvider } from "./contexts/AuthContext";
 import { OrganizationProvider } from "./contexts/OrganizationContext";
+import { FetchInterceptorInit } from "./components/FetchInterceptorInit";
 
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL;
 
@@ -51,6 +52,7 @@ export default function RootLayout({
       </head>
       <body className={`antialiased`} suppressHydrationWarning>
         <SuppressDevToolsError />
+        <FetchInterceptorInit />
         <TranslationProvider>
           <AuthProvider>
             <OrganizationProvider>

@@ -6,7 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseAdmin } from '@/app/lib/supabase';
+import { getSupabaseAdmin } from '@/app/lib/supabaseClient';
 import { getWhatsAppMessageHandler } from '@/app/lib/whatsapp/messageHandler';
 import {
   EvolutionWebhookEvent,

@@ -1,0 +1,292 @@
+'use client';
+
+import { useTranslations } from '@/lib/i18n/TranslationProvider';
+
+/**
+ * WhatsApp Admin Settings
+ * 
+ * Manage WhatsApp connection in admin panel
+ * Allows admins to check status, reconnect, or disconnect
+ */
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+
+type ConnectionStatus = 'open' | 'close' | 'connecting' | 'unknown';
+
+export default function WhatsAppSettingsPage() {
+  const tCommon = useTranslations('common');
+  const router = useRouter();
+  const [status, setStatus] = useState<ConnectionStatus>('unknown');
+  const [loading, setLoading] = useState(true);
+  const [instanceInfo, setInstanceInfo] = useState<any>(null);
+
+  /**
+   * Check WhatsApp connection status
+   */
+  const checkStatus = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch('/api/whatsapp/setup?action=check_status');
+      const data = await response.json();
+      
+      if (data.instance) {
+        setStatus(data.instance.status || 'unknown');
+        setInstanceInfo(data.instance);
+      } else {
+        setStatus('close');
+      }
+    } catch (error) {
+      console.error('Error checking status:', error);
+      setStatus('unknown');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Disconnect WhatsApp instance
+   */
+  const handleDisconnect = async () => {
+    if (!confirm('Are you sure you want to disconnect WhatsApp? Users will not be able to message via WhatsApp until you reconnect.')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const response = await fetch('/api/whatsapp/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'disconnect' }),
+      });
+
+      if (response.ok) {
+        setStatus('close');
+        alert('WhatsApp disconnected successfully');
+      } else {
+        throw new Error('Failed to disconnect');
+      }
+    } catch (error: any) {
+      console.error('Error disconnecting:', error);
+      alert('Failed to disconnect WhatsApp: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Navigate to setup wizard for reconnection
+   */
+  const handleReconnect = () => {
+    router.push('/setup/whatsapp');
+  };
+
+  // Check status on mount
+  useEffect(() => {
+    checkStatus();
+    
+    // Auto-refresh every 30 seconds
+    const interval = setInterval(checkStatus, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  /**
+   * Get status badge
+   */
+  const getStatusBadge = () => {
+    switch (status) {
+      case 'open':
+        return <Badge className="bg-green-500">{tCommon('connected')}</Badge>;
+      case 'connecting':
+        return <Badge className="bg-yellow-500">{tCommon('connecting')}</Badge>;
+      case 'close':
+        return <Badge className="bg-red-500">{tCommon('disconnected')}</Badge>;
+      default:
+        return <Badge className="bg-gray-500">{tCommon('unknown')}</Badge>;
+    }
+  };
+
+  /**
+   * Get status icon
+   */
+  const getStatusIcon = () => {
+    switch (status) {
+      case 'open':
+        return '✅';
+      case 'connecting':
+        return '🔄';
+      case 'close':
+        return '❌';
+      default:
+        return '❓';
+    }
+  };
+
+  return (
+    <div className="container mx-auto p-6 max-w-4xl">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">{tCommon('whatsapp_settings')}</h1>
+        <p className="text-gray-600 dark:text-gray-400 mt-2">
+          Manage your WhatsApp integration and connection status
+        </p>
+      </div>
+
+      <div className="space-y-6">
+        {/* Connection Status Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <span className="text-2xl">{getStatusIcon()}</span>
+              Connection Status
+            </CardTitle>
+            <CardDescription>
+              Current status of your WhatsApp connection
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {loading ? (
+              <div className="flex items-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900 dark:border-gray-100"></div>
+                <span className="text-sm text-gray-600 dark:text-gray-400">{tCommon('checking_status')}</span>
+              </div>
+            ) : (
+              <>
+                <div className="flex items-center gap-3">
+                  <span className="font-semibold">{tCommon('status')}</span>
+                  {getStatusBadge()}
+                </div>
+
+                {instanceInfo && (
+                  <div className="text-sm space-y-1">
+                    <div className="flex gap-2">
+                      <span className="font-semibold">{tCommon('instance_name')}</span>
+                      <span className="text-gray-600 dark:text-gray-400">
+                        {instanceInfo.instanceName || 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-3 pt-4">
+                  {status === 'open' ? (
+                    <Button onClick={handleDisconnect} variant="destructive" disabled={loading}>
+                      Disconnect
+                    </Button>
+                  ) : (
+                    <Button onClick={handleReconnect} variant="default" disabled={loading}>
+                      {status === 'close' ? 'Connect WhatsApp' : 'Reconnect'}
+                    </Button>
+                  )}
+                  <Button onClick={checkStatus} variant="outline" disabled={loading}>
+                    Refresh Status
+                  </Button>
+                </div>
+              </>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Information Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{tCommon('about_whatsapp_integration')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 text-sm">
+            <div>
+              <h4 className="font-semibold mb-1">{tCommon('what_is_this')}</h4>
+              <p className="text-gray-600 dark:text-gray-400">
+                This integration allows users to interact with your AI booking assistant via WhatsApp messages.
+              </p>
+            </div>
+
+            <div>
+              <h4 className="font-semibold mb-1">How it works:</h4>
+              <ul className="list-disc list-inside text-gray-600 dark:text-gray-400 space-y-1">
+                <li>{tCommon('users_send_messages_to_your_wh')}</li>
+                <li>{tCommon('the_ai_assistant_responds_natu')}</li>
+                <li>{tCommon('all_conversations_are_logged_i')}</li>
+                <li>{tCommon('same_functionality_as_phone_ca')}</li>
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="font-semibold mb-1">{tCommon('requirements')}</h4>
+              <ul className="list-disc list-inside text-gray-600 dark:text-gray-400 space-y-1">
+                <li>{tCommon('evolution_api_must_be_running')}</li>
+                <li>{tCommon('whatsapp_account_with_active_p')}</li>
+                <li>{tCommon('phone_must_stay_connected_like')}</li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Quick Actions Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{tCommon('quick_actions')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Button 
+              onClick={() => router.push('/admin/booking/calls')} 
+              variant="outline"
+              className="w-full justify-start"
+            >
+              📊 View WhatsApp Conversations
+            </Button>
+            <Button 
+              onClick={() => router.push('/setup/whatsapp')} 
+              variant="outline"
+              className="w-full justify-start"
+            >
+              🔧 Setup/Reconnect WhatsApp
+            </Button>
+            <Button 
+              onClick={() => router.push('/admin')} 
+              variant="outline"
+              className="w-full justify-start"
+            >
+              🏠 Back to Dashboard
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Troubleshooting Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{tCommon('troubleshooting')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+            <div>
+              <p className="font-semibold">{tCommon('connection_shows_disconnected')}</p>
+              <ul className="list-disc list-inside ml-4">
+                <li>{tCommon('check_if_evolution_api_is_runn')}</li>
+                <li>{tCommon('verify_your_phone_has_internet')}</li>
+                <li>{tCommon('try_reconnecting_via_the_setup')}</li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold">{tCommon('messages_not_being_received')}</p>
+              <ul className="list-disc list-inside ml-4">
+                <li>{tCommon('confirm_webhook_url_is_configu')}</li>
+                <li>{tCommon('check_evolution_api_logs_for_e')}</li>
+                <li>{tCommon('verify_whatsapp_is_still_linke')}</li>
+              </ul>
+            </div>
+            <div>
+              <p className="font-semibold">{tCommon('qr_code_expired')}</p>
+              <ul className="list-inside ml-4">
+                <li>{tCommon('qr_codes_expire_after_a_few_mi')}</li>
+                <li>{tCommon('go_to_setup_wizard_to_generate')}</li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+
