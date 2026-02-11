@@ -21,6 +21,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const date = searchParams.get('date');
     const source = searchParams.get('source'); // 'memory' to force in-memory only
+    const channel = searchParams.get('channel'); // 'sms', 'voice', etc.
     
     let conversations;
     
@@ -36,7 +37,13 @@ export async function GET(req: NextRequest) {
         : await getAllConversationsFromSupabase(context.organizationId);
     }
     
-    console.log(`[Conversations API] Returning ${conversations.length} conversations for date=${date || 'all'}`);
+    // Filter by channel if specified
+    if (channel) {
+      conversations = conversations.filter((conv: any) => conv.channel === channel);
+      console.log(`[Conversations API] Filtered to ${conversations.length} ${channel} conversations`);
+    }
+    
+    console.log(`[Conversations API] Returning ${conversations.length} conversations for date=${date || 'all'}, channel=${channel || 'all'}`);
     
     return NextResponse.json(conversations);
   } catch (error: any) {

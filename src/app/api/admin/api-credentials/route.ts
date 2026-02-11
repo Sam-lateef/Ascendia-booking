@@ -13,10 +13,17 @@ export async function GET(request: NextRequest) {
     const context = await getCurrentOrganization(request);
     const supabase = getSupabaseAdmin();
 
+    const isSystemOrgOwner = context.isSystemOrg && context.role === 'owner';
+
+    // System creds (org_id IS NULL) only for system org owner. All orgs get their own org creds.
+    const filter = isSystemOrgOwner
+      ? `organization_id.eq.${context.organizationId},organization_id.is.null`
+      : `organization_id.eq.${context.organizationId}`;
+
     const { data, error } = await supabase
       .from('api_credentials')
       .select('*')
-      .eq('organization_id', context.organizationId)
+      .or(filter)
       .order('credential_type', { ascending: true })
       .order('is_default', { ascending: false })
       .order('created_at', { ascending: false });
@@ -59,7 +66,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { credential_type, credential_name, description, credentials, is_default } = body;
+    const { credential_type, credential_name, description, credentials, is_default, is_system } = body;
 
     // Validate required fields
     if (!credential_type || !credential_name || !credentials) {
@@ -69,28 +76,37 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const supabase = getSupabaseAdmin();
+    const isSystemOrgOwner = context.isSystemOrg && context.role === 'owner';
+    if (is_system && !isSystemOrgOwner) {
+      return NextResponse.json(
+        { error: 'Only system org owner can create system-level credentials.', success: false },
+        { status: 403 }
+      );
+    }
 
-    // If setting as default, unset other defaults for this type
+    const supabase = getSupabaseAdmin();
+    const organizationId = is_system ? null : context.organizationId;
+
     if (is_default) {
-      await supabase
+      let unsetQuery = supabase
         .from('api_credentials')
         .update({ is_default: false })
-        .eq('organization_id', context.organizationId)
         .eq('credential_type', credential_type)
         .eq('is_default', true);
+      unsetQuery = organizationId ? unsetQuery.eq('organization_id', organizationId) : unsetQuery.is('organization_id', null);
+      await unsetQuery;
     }
 
     const { data, error } = await supabase
       .from('api_credentials')
       .insert({
-        organization_id: context.organizationId,
+        organization_id: organizationId,
         credential_type,
         credential_name,
         description,
         credentials,
         is_default: is_default || false,
-        created_by: context.userId,
+        created_by: context.user?.id ?? null,
       })
       .select()
       .single();

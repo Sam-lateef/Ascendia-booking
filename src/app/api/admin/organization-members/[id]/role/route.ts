@@ -57,10 +57,10 @@ export async function PATCH(
       );
     }
 
-    // Only admins and owners can assign admin or owner roles
-    if ((role === 'admin' || role === 'owner') && !['admin', 'owner'].includes(context.role)) {
+    // Only owners and admins can change roles
+    if (!['owner', 'admin'].includes(context.role)) {
       return NextResponse.json(
-        { success: false, error: 'Insufficient permissions to assign this role' },
+        { success: false, error: 'Only Owners and Admins can change member roles' },
         { status: 403 }
       );
     }

@@ -9,6 +9,14 @@ import { getSupabaseAdmin } from '@/app/lib/supabaseClient';
 export async function POST(req: NextRequest) {
   try {
     const context = await getCurrentOrganization(req);
+
+    if (!['owner', 'admin'].includes(context.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Only Owners and Admins can invite new members' },
+        { status: 403 }
+      );
+    }
+
     const supabase = getSupabaseAdmin();
     const body = await req.json();
     

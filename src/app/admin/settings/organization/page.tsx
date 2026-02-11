@@ -500,7 +500,7 @@ export default function OrganizationSettingsPage() {
             Team Members
           </CardTitle>
           <CardDescription>
-            Manage who has access to your organization
+            Manage who has access to your organization. <strong>Only Owners and Admins</strong> can invite members and change roles. To make someone an Admin: change their role in the dropdown below.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -602,12 +602,15 @@ export default function OrganizationSettingsPage() {
               <p className="text-sm font-medium text-blue-900">Role Descriptions</p>
             </div>
             <ul className="text-xs text-blue-800 space-y-1 ml-6">
-              <li><strong>Owner:</strong> Full access - cannot be changed or removed</li>
-              <li><strong>Admin:</strong> Full access to all settings and data</li>
+              <li><strong>Owner:</strong> Full access – created with the org, cannot be changed or removed</li>
+              <li><strong>Admin:</strong> Full access to settings, integrations, and team – can assign roles</li>
               <li><strong>Manager:</strong> Manage appointments, patients, and staff</li>
               <li><strong>Staff:</strong> View and edit appointments and patients</li>
               <li><strong>Member:</strong> View-only access to appointments</li>
             </ul>
+            <p className="text-xs text-blue-700 mt-2 font-medium">
+              → To restrict Integrations and Settings, keep users as Member/Staff/Manager. Only Owner and Admin see the Settings menu.
+            </p>
           </div>
         </CardContent>
       </Card>

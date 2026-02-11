@@ -11,6 +11,7 @@ export interface Organization {
   plan?: string;
   logo_url?: string;
   primary_color?: string;
+  is_system_org?: boolean;
 }
 
 interface OrganizationContextType {
@@ -78,19 +79,55 @@ export function OrganizationProvider({ children }: { children: ReactNode }) {
 
       console.log('[OrganizationContext] Calling API with token length:', session.access_token.length);
       
-      const response = await fetch('/api/user/organizations', {
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-      });
+      let response;
+      try {
+        response = await fetch('/api/user/organizations', {
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+          },
+        });
+      } catch (fetchError: any) {
+        console.error('[OrganizationContext] Network error during fetch:', fetchError);
+        // Network error - just return silently, will retry on next auth state change
+        setLoading(false);
+        return;
+      }
       
       console.log('[OrganizationContext] API response status:', response.status);
       
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('[OrganizationContext] API error:', errorData);
-        throw new Error(errorData.error || 'Failed to load organizations');
+        let errorData: any = {};
+        let errorText = '';
+        
+        try {
+          errorText = await response.text();
+          if (errorText) {
+            errorData = JSON.parse(errorText);
+          }
+        } catch (e) {
+          console.error('[OrganizationContext] Failed to parse error response:', e);
+          console.error('[OrganizationContext] Raw error text:', errorText);
+        }
+        
+        console.error('[OrganizationContext] API error details:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+          rawText: errorText.substring(0, 200) // First 200 chars
+        });
+        
+        // If token is invalid, sign out
+        if (response.status === 401) {
+          console.log('[OrganizationContext] Unauthorized - signing out');
+          await supabase.auth.signOut();
+          window.location.href = '/login';
+          return;
+        }
+        
+        // Don't throw error, just set loading to false
+        setLoading(false);
+        return;
       }
       
       const data = await response.json();

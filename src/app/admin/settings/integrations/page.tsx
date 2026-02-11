@@ -36,36 +36,34 @@ import {
   Plus
 } from 'lucide-react';
 
-// Define all integrations with their credential fields
-const INTEGRATION_CONFIGS = {
-  openai: {
-    name: 'OpenAI',
-    description: 'GPT-4o, GPT-4o-mini, Realtime API for voice',
-    icon: Brain,
-    required: true,
-    category: 'AI Models',
-    fields: [
-      { key: 'api_key', label: 'API Key', type: 'password', placeholder: 'sk-proj-...', required: true, helpText: 'Get from platform.openai.com/api-keys' },
-    ],
-    testEndpoint: '/api/admin/api-credentials/test',
-  },
-  anthropic: {
-    name: 'Anthropic',
-    description: 'Claude AI models',
-    icon: Brain,
-    required: false,
-    category: 'AI Models',
-    fields: [
-      { key: 'api_key', label: 'API Key', type: 'password', placeholder: 'sk-ant-api03-...', required: true, helpText: 'Get from console.anthropic.com' },
-    ],
-    testEndpoint: '/api/admin/api-credentials/test',
-  },
+// System vs org: Platform credentials are one-time, shared across all orgs. Org credentials are per-tenant.
+type IntegrationLevel = 'system' | 'org' | 'mixed';
+
+interface IntegrationConfig {
+  name: string;
+  description: string;
+  icon: any;
+  required?: boolean;
+  category: string;
+  level: IntegrationLevel;
+  credentialType?: string;
+  fields: Array<{ key: string; label: string; type: string; placeholder: string; required: boolean; helpText?: string; options?: string[] }>;
+  testEndpoint?: string;
+  hasSyncConfig?: boolean;
+  hasOAuthConnect?: boolean;
+  systemFields?: string[];
+  orgFields?: string[];
+}
+
+// Org-only integrations. Platform (OpenAI, Anthropic, Google OAuth App) are in System Settings.
+const INTEGRATION_CONFIGS: Record<string, IntegrationConfig> = {
   twilio: {
     name: 'Twilio',
     description: 'Voice calls and SMS messaging',
     icon: Phone,
     required: false,
-    category: 'Communication',
+    category: 'Organization',
+    level: 'org',
     fields: [
       { key: 'account_sid', label: 'Account SID', type: 'text', placeholder: 'AC...', required: true, helpText: 'From Twilio Console Dashboard' },
       { key: 'auth_token', label: 'Auth Token', type: 'password', placeholder: 'Your auth token', required: true },
@@ -79,7 +77,8 @@ const INTEGRATION_CONFIGS = {
     description: 'WhatsApp messaging integration',
     icon: MessageSquare,
     required: false,
-    category: 'Communication',
+    category: 'Organization',
+    level: 'org',
     fields: [
       { key: 'api_url', label: 'API URL', type: 'url', placeholder: 'https://api.evolution.com', required: true },
       { key: 'api_key', label: 'API Key', type: 'password', placeholder: 'Your Evolution API key', required: true },
@@ -92,7 +91,8 @@ const INTEGRATION_CONFIGS = {
     description: 'Dental practice management system',
     icon: Database,
     required: false,
-    category: 'Practice Management',
+    category: 'Organization',
+    level: 'org',
     hasSyncConfig: true,
     fields: [
       { key: 'api_url', label: 'API Base URL', type: 'url', placeholder: 'https://api.opendental.com/api/v1/', required: true },
@@ -106,7 +106,8 @@ const INTEGRATION_CONFIGS = {
     description: 'Voice AI platform for phone calls',
     icon: Mic,
     required: false,
-    category: 'Voice AI',
+    category: 'Organization',
+    level: 'org',
     fields: [
       { key: 'api_key', label: 'API Key', type: 'password', placeholder: 'key_...', required: true },
       { key: 'agent_id', label: 'Agent ID', type: 'text', placeholder: 'agent_...', required: false, helpText: 'Default Retell agent to use' },
@@ -115,16 +116,16 @@ const INTEGRATION_CONFIGS = {
     testEndpoint: '/api/admin/api-credentials/test',
   },
   google_calendar: {
-    name: 'Google Calendar',
-    description: 'Calendar sync and scheduling',
+    name: 'Google Calendar (Connect)',
+    description: 'Connect this org\'s Google Calendar. Requires OAuth App in System Settings first.',
     icon: Calendar,
     required: false,
-    category: 'Scheduling',
+    category: 'Organization',
+    level: 'org',
     hasSyncConfig: true,
+    hasOAuthConnect: true,
     fields: [
-      { key: 'client_id', label: 'Client ID', type: 'text', placeholder: '...apps.googleusercontent.com', required: true, helpText: 'From Google Cloud Console' },
-      { key: 'client_secret', label: 'Client Secret', type: 'password', placeholder: 'GOCSPX-...', required: true },
-      { key: 'refresh_token', label: 'Refresh Token', type: 'password', placeholder: 'OAuth refresh token', required: true, helpText: 'Obtained via OAuth consent flow' },
+      { key: 'refresh_token', label: 'Refresh Token', type: 'password', placeholder: 'Click Connect below', required: false, helpText: 'Obtained via Connect Google Calendar button (OAuth)' },
       { key: 'calendar_id', label: 'Calendar ID', type: 'text', placeholder: 'primary', required: false, helpText: 'Default: primary calendar' },
     ],
     testEndpoint: '/api/integrations/google-calendar',
@@ -166,37 +167,69 @@ export default function IntegrationsPage() {
   const [testing, setTesting] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [testResults, setTestResults] = useState<Record<string, { success: boolean; message: string }>>({});
+  const [hasGoogleOAuthAppConfigured, setHasGoogleOAuthAppConfigured] = useState(false);
 
   useEffect(() => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const gcalSuccess = params.get('gcal_success');
+    const gcalError = params.get('gcal_error');
+    if (gcalSuccess) {
+      setMessage({ type: 'success', text: 'Google Calendar connected successfully!' });
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (gcalError) {
+      setMessage({ type: 'error', text: decodeURIComponent(gcalError) });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   const fetchData = async () => {
     setLoading(true);
     try {
-      // Fetch both in parallel for better performance
-      const [credResponse, syncResponse] = await Promise.all([
+      // Fetch credentials, sync configs, and Google OAuth app status (for non-system-org Connect button)
+      const [credResponse, syncResponse, oauthStatusResponse] = await Promise.all([
         fetch('/api/admin/api-credentials'),
-        fetch('/api/admin/integration-settings')
+        fetch('/api/admin/integration-settings'),
+        fetch('/api/integrations/google-calendar/oauth-status')
       ]);
-      
-      const [credData, syncData] = await Promise.all([
+
+      const [credData, syncData, oauthStatusData] = await Promise.all([
         credResponse.json(),
-        syncResponse.json()
+        syncResponse.json(),
+        oauthStatusResponse.json()
       ]);
+
+      if (oauthStatusData.success && oauthStatusData.configured) {
+        setHasGoogleOAuthAppConfigured(true);
+      }
       
-      // Process credentials
+      // Process credentials: map by config key (e.g. google_calendar_system, google_calendar, openai)
       if (credData.success && credData.credentials) {
         const credMap: Record<string, CredentialData> = {};
-        credData.credentials.forEach((cred: CredentialData) => {
-          credMap[cred.credential_type] = cred;
+        const editMap: Record<string, Record<string, string>> = {};
+
+        credData.credentials.forEach((cred: CredentialData & { organization_id?: string | null }) => {
+          const isSystem = cred.organization_id === null;
+          // Map credential_type to our config keys
+          if (cred.credential_type === 'google_calendar') {
+            const key = isSystem ? 'google_calendar_system' : 'google_calendar';
+            credMap[key] = cred;
+            editMap[key] = { ...cred.credentials };
+          } else {
+            const key = cred.credential_type;
+            if (isSystem || !credMap[key]) {
+              credMap[key] = cred;
+              editMap[key] = { ...cred.credentials };
+            }
+          }
         });
         setCredentials(credMap);
-        
-        // Initialize editing values from existing credentials
-        const editMap: Record<string, Record<string, string>> = {};
-        Object.entries(credMap).forEach(([type, cred]) => {
-          editMap[type] = { ...cred.credentials };
+
+        Object.keys(INTEGRATION_CONFIGS).forEach((key) => {
+          if (!editMap[key]) editMap[key] = credMap[key] ? { ...credMap[key].credentials } : {};
         });
         setEditingValues(editMap);
       }
@@ -255,13 +288,16 @@ export default function IntegrationsPage() {
       const config = INTEGRATION_CONFIGS[type];
       const existingCred = credentials[type];
       const values = editingValues[type] || {};
+      const credentialType = config.credentialType || type;
+      const isSystem = config.level === 'system';
 
       const payload = {
-        credential_type: type,
+        credential_type: credentialType,
         credential_name: config.name,
         description: config.description,
         credentials: values,
         is_default: true,
+        is_system: isSystem,
       };
 
       const url = existingCred?.id 
@@ -411,6 +447,9 @@ export default function IntegrationsPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Integrations</h1>
           <p className="text-gray-600 mt-1">Configure all external service connections</p>
+          <p className="text-sm text-gray-500 mt-2">
+            Org-specific credentials. Platform config (OpenAI, Anthropic, Google OAuth) is in System Settings (system org owner only).
+          </p>
         </div>
         <Button variant="outline" onClick={fetchData}>
           <RefreshCw className="w-4 h-4 mr-2" />
@@ -447,7 +486,7 @@ export default function IntegrationsPage() {
               const cred = credentials[integration.key];
               const isConfigured = !!cred?.credentials && Object.values(cred.credentials).some(v => v);
               const syncConfig = syncConfigs[integration.key];
-              const values = editingValues[integration.key] || cred?.credentials || {};
+              const values = editingValues[integration.key] ?? cred?.credentials ?? {};
 
               return (
                 <Card key={integration.key} className={`transition-all ${isExpanded ? 'ring-2 ring-blue-500' : ''}`}>
@@ -628,6 +667,73 @@ export default function IntegrationsPage() {
                         </div>
                       )}
 
+                      {/* Google Calendar OAuth Connect */}
+                      {integration.key === 'google_calendar' && ('hasOAuthConnect' in integration && (integration as any).hasOAuthConnect) && (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-2">
+                          <p className="text-sm text-blue-800 font-medium">OAuth Connection</p>
+                          <p className="text-xs text-blue-700">
+                            Save Client ID and Client Secret first, then click Connect to authorize via Google.
+                          </p>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                            onClick={async () => {
+                              const systemCred = credentials.google_calendar_system;
+                              const hasClientCredsInUI = (systemCred?.credentials?.client_id && systemCred?.credentials?.client_secret)
+                                || (cred?.credentials?.client_id && cred?.credentials?.client_secret);
+                              if (!hasClientCredsInUI && !hasGoogleOAuthAppConfigured) {
+                                setMessage({ type: 'error', text: 'Configure Google Calendar (OAuth App) in System Settings first' });
+                                return;
+                              }
+                              try {
+                                const res = await fetch('/api/integrations/google-calendar/oauth', { method: 'POST' });
+                                const data = await res.json();
+                                if (data.success && data.authUrl) {
+                                  window.location.href = data.authUrl;
+                                } else {
+                                  setMessage({ type: 'error', text: data.error || 'Failed to start OAuth' });
+                                }
+                              } catch {
+                                setMessage({ type: 'error', text: 'Failed to connect to server' });
+                              }
+                            }}
+                          >
+                            <Plug className="w-4 h-4 mr-2" />
+                            Connect Google Calendar
+                          </Button>
+                          {syncConfig?.sync_enabled && (syncConfig.sync_direction === 'from_external' || syncConfig.sync_direction === 'bidirectional') && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="ml-2 border-gray-300"
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch('/api/integrations/google-calendar', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    credentials: 'include',
+                                    body: JSON.stringify({ action: 'syncFromGoogle' }),
+                                  });
+                                  const data = await res.json();
+                                  if (data.success) {
+                                    setMessage({ type: 'success', text: `Synced: ${data.created} created, ${data.updated} updated, ${data.cancelled} cancelled` });
+                                    fetchData();
+                                  } else {
+                                    setMessage({ type: 'error', text: data.error || 'Sync failed' });
+                                  }
+                                } catch (e) {
+                                  setMessage({ type: 'error', text: 'Sync request failed' });
+                                }
+                              }}
+                            >
+                              <RefreshCw className="w-4 h-4 mr-2" />
+                              Sync from Google
+                            </Button>
+                          )}
+                        </div>
+                      )}
+
                       {/* Action Buttons */}
                       <div className="flex items-center gap-3 pt-4 border-t">
                         <Button 
@@ -687,6 +793,8 @@ export default function IntegrationsPage() {
                 <li>Fill in the required fields (marked with *)</li>
                 <li>Click Save to store the configuration</li>
                 <li>Click Test Connection to verify it works</li>
+                <li><strong>Platform</strong> configs (OpenAI, Anthropic, Google OAuth App) apply to all orgs – set once</li>
+                <li>You must be <strong>Owner</strong> or <strong>Admin</strong> to save</li>
               </ol>
             </div>
           </div>

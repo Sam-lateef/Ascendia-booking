@@ -38,13 +38,36 @@ async function getEmailRecipients(organizationId: string): Promise<string[]> {
     // Get organization with notification settings
     const { data: org, error } = await supabase
       .from('organizations')
-      .select('email, notification_settings')
+      .select('email, notification_settings, slug, name')
       .eq('id', organizationId)
       .single();
     
     if (error) {
       console.error('[Email] Error fetching organization:', error);
       return [];
+    }
+    
+    // Check if this is the demo organization
+    const isDemoOrg = org.slug === 'demo' || org.name?.toLowerCase() === 'demo';
+    
+    if (isDemoOrg) {
+      console.log('[Email] Demo organization detected - checking for demo emails');
+      
+      // Get active demo emails (registered in last 2 hours)
+      const { data: demoEmails, error: demoError } = await supabase
+        .from('demo_emails')
+        .select('email')
+        .eq('organization_id', organizationId)
+        .gte('last_used_at', new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString())
+        .order('last_used_at', { ascending: false });
+      
+      if (!demoError && demoEmails && demoEmails.length > 0) {
+        const emails = demoEmails.map(d => d.email);
+        console.log(`[Email] Using ${emails.length} demo email(s): ${emails.join(', ')}`);
+        return emails;
+      }
+      
+      console.log('[Email] No active demo emails found, falling back to standard recipients');
     }
     
     // Priority 1: Custom recipients from notification_settings
@@ -134,9 +157,9 @@ async function shouldSendEmail(callData: CallData): Promise<{ shouldSend: boolea
       return { shouldSend: false, reason: 'Email notifications disabled in org settings' };
     }
     
-    // Check minimum duration filter
+    // Check minimum duration filter (skip if duration is unknown/null)
     const minDuration = settings.min_duration_to_notify || 10000; // Default 10 seconds
-    if (callData.duration_ms < minDuration) {
+    if (callData.duration_ms != null && callData.duration_ms < minDuration) {
       return { 
         shouldSend: false, 
         reason: `Call too short (${callData.duration_ms}ms < ${minDuration}ms)` 

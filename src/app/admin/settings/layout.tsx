@@ -16,7 +16,9 @@ import {
   Languages,
   Globe,
   FlaskConical,
-  Bell
+  Bell,
+  Phone,
+  Shield
 } from 'lucide-react';
 import { useAuth } from '@/app/contexts/AuthContext';
 import { useOrganization } from '@/app/contexts/OrganizationContext';
@@ -36,6 +38,7 @@ export default function SettingsLayout({
   
   const { user, loading: authLoading } = useAuth();
   const { currentOrganization, loading: orgLoading } = useOrganization();
+  const isSystemOrgOwner = currentOrganization?.is_system_org && currentOrganization?.role === 'owner';
 
   const settingsNavItems = [
     { 
@@ -43,6 +46,12 @@ export default function SettingsLayout({
       label: 'Organization', 
       icon: Building2,
       description: 'Business info, branding, industry type'
+    },
+    { 
+      href: '/admin/settings/phone-numbers', 
+      label: 'Phone Numbers', 
+      icon: Phone,
+      description: 'Setup & manage Vapi voice numbers'
     },
     { 
       href: '/admin/settings/channels', 
@@ -54,8 +63,15 @@ export default function SettingsLayout({
       href: '/admin/settings/integrations', 
       label: 'Integrations', 
       icon: Plug,
-      description: 'API keys, credentials & sync settings'
+      description: 'Org API keys, credentials & sync settings'
     },
+    ...(isSystemOrgOwner ? [{
+      href: '/admin/settings/system',
+      label: 'System Settings',
+      icon: Shield,
+      description: 'Platform-wide config (OpenAI, Google OAuth)',
+      isSystem: true,
+    }] : []),
     { 
       href: '/admin/settings/notifications', 
       label: 'Notifications', 

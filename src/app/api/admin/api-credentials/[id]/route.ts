@@ -16,12 +16,17 @@ export async function GET(
   try {
     const context = await getCurrentOrganization(request);
     const supabase = getSupabaseAdmin();
+    const isSystemOrgOwner = context.isSystemOrg && context.role === 'owner';
+
+    const filter = isSystemOrgOwner
+      ? `organization_id.eq.${context.organizationId},organization_id.is.null`
+      : `organization_id.eq.${context.organizationId}`;
 
     const { data, error } = await supabase
       .from('api_credentials')
       .select('*')
       .eq('id', params.id)
-      .eq('organization_id', context.organizationId)
+      .or(filter)
       .single();
 
     if (error) {
@@ -66,13 +71,17 @@ export async function PUT(
     const { credential_type, credential_name, description, credentials, is_default } = body;
 
     const supabase = getSupabaseAdmin();
+    const isSystemOrgOwner = context.isSystemOrg && context.role === 'owner';
+    const filter = isSystemOrgOwner
+      ? `organization_id.eq.${context.organizationId},organization_id.is.null`
+      : `organization_id.eq.${context.organizationId}`;
 
-    // Verify credential belongs to user's organization
+    // Verify credential belongs to user's org or is system cred (system only for system org owner)
     const { data: existing, error: checkError } = await supabase
       .from('api_credentials')
-      .select('id')
+      .select('id, organization_id')
       .eq('id', params.id)
-      .eq('organization_id', context.organizationId)
+      .or(filter)
       .single();
 
     if (checkError || !existing) {
@@ -82,15 +91,24 @@ export async function PUT(
       );
     }
 
-    // If setting as default, unset other defaults for this type
+    const isSystemCred = existing.organization_id === null;
+
+    if (isSystemCred && !isSystemOrgOwner) {
+      return NextResponse.json(
+        { error: 'Only system org owner can update system credentials.', success: false },
+        { status: 403 }
+      );
+    }
+
     if (is_default) {
-      await supabase
+      let unsetQuery = supabase
         .from('api_credentials')
         .update({ is_default: false })
-        .eq('organization_id', context.organizationId)
         .eq('credential_type', credential_type)
         .eq('is_default', true)
         .neq('id', params.id);
+      unsetQuery = isSystemCred ? unsetQuery.is('organization_id', null) : unsetQuery.eq('organization_id', context.organizationId);
+      await unsetQuery;
     }
 
     const { data, error } = await supabase
@@ -104,7 +122,6 @@ export async function PUT(
         updated_at: new Date().toISOString(),
       })
       .eq('id', params.id)
-      .eq('organization_id', context.organizationId)
       .select()
       .single();
 
@@ -139,21 +156,43 @@ export async function DELETE(
   try {
     const context = await getCurrentOrganization(request);
     
-    // Only owners can delete credentials
-    if (context.role !== 'owner') {
+    const supabase = getSupabaseAdmin();
+
+    const { data: cred } = await supabase
+      .from('api_credentials')
+      .select('organization_id')
+      .eq('id', params.id)
+      .single();
+
+    if (!cred) {
       return NextResponse.json(
-        { error: 'Permission denied - Only owners can delete credentials', success: false },
-        { status: 403 }
+        { error: 'Credential not found', success: false },
+        { status: 404 }
       );
     }
 
-    const supabase = getSupabaseAdmin();
+    const isSystemCred = cred.organization_id === null;
+    const isSystemOrgOwner = context.isSystemOrg && context.role === 'owner';
 
-    const { error } = await supabase
-      .from('api_credentials')
-      .delete()
-      .eq('id', params.id)
-      .eq('organization_id', context.organizationId);
+    if (isSystemCred) {
+      if (!isSystemOrgOwner) {
+        return NextResponse.json(
+          { error: 'Permission denied - Only system org owner can delete system credentials', success: false },
+          { status: 403 }
+        );
+      }
+    } else {
+      if (context.role !== 'owner') {
+        return NextResponse.json(
+          { error: 'Permission denied - Only owners can delete org credentials', success: false },
+          { status: 403 }
+        );
+      }
+    }
+
+    let deleteQuery = supabase.from('api_credentials').delete().eq('id', params.id);
+    deleteQuery = isSystemCred ? deleteQuery.is('organization_id', null) : deleteQuery.eq('organization_id', context.organizationId);
+    const { error } = await deleteQuery;
 
     if (error) {
       console.error('[API Credentials] Error deleting credential:', error);

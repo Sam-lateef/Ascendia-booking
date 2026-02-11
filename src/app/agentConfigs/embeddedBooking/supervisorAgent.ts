@@ -35,6 +35,16 @@ CRITICAL - ALWAYS START WITH THESE TOOLS
 
 NEVER guess dates - always use get_datetime() to calculate correct year/month/day.
 
+**DATE/DAY VALIDATION:**
+When patient says "Thursday the 5th":
+1. get_datetime() shows today is: "2026-01-31 (Friday)"
+2. If patient wants "Thursday", that's 6 days from today = February 6, 2026
+3. VERIFY: Is February 6, 2026 actually a Thursday? YES
+4. If patient says "Thursday the 5th" but Thursday is the 6th → CORRECT THEM:
+   "I have Thursday, February 6th available. Did you mean Thursday the 6th?"
+
+ALWAYS match the day name with the actual date. NEVER say "Thursday the 5th" if Thursday is the 6th.
+
 ═══════════════════════════════════════════════════════════════════════════════
 CRITICAL - CHECK BOOKING STATE FIRST (before any function calls!)
 ═══════════════════════════════════════════════════════════════════════════════
@@ -232,6 +242,12 @@ BAD: "GetMultiplePatients returned 1 result with PatNum 39."
 GOOD: "You're all set! I've booked your appointment with Dr. Sarah Pearl for Thursday, January 16th at 10 AM."
 BAD: "CreateAppointment executed successfully for PatNum 39 on 2026-01-16 10:00:00."
 
+**WHEN PRESENTING AVAILABLE SLOTS:**
+ALWAYS include BOTH day name AND date to avoid confusion:
+GOOD: "I have Thursday, February 6th at 9 AM, 10:30 AM, or 2 PM."
+BAD: "I have Thursday the 5th..." (when Thursday is actually the 6th)
+The GetAvailableSlots response includes dates - USE those exact dates with correct day names.
+
 ═══════════════════════════════════════════════════════════════════════════════
 REMEMBER:
 1. **CHECK BOOKING STATE FIRST** - before every function call!
@@ -377,20 +393,44 @@ export const supervisorTools = [
 export async function executeSupervisorTool(
   toolName: string,
   args: Record<string, unknown>,
-  sessionId: string
+  sessionId: string,
+  organizationId?: string
 ): Promise<string> {
   console.log(`[Supervisor] Executing ${toolName}`);
 
   switch (toolName) {
     case 'get_datetime': {
+      // Get current time in organization's timezone (America/New_York by default)
+      const timezone = 'America/New_York';
       const now = new Date();
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      const seconds = String(now.getSeconds()).padStart(2, '0');
-      const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
+      
+      // Convert to organization timezone
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        weekday: 'long'
+      });
+      
+      const parts = formatter.formatToParts(now);
+      const partsMap: Record<string, string> = {};
+      parts.forEach(({ type, value }) => {
+        partsMap[type] = value;
+      });
+      
+      const year = partsMap['year'];
+      const month = partsMap['month'];
+      const day = partsMap['day'];
+      const hours = partsMap['hour'];
+      const minutes = partsMap['minute'];
+      const seconds = partsMap['second'];
+      const dayName = partsMap['weekday'];
+      
       return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} (${dayName})`;
     }
 
@@ -409,11 +449,16 @@ export async function executeSupervisorTool(
       // Use server-side BASE_URL for production, fallback to localhost for dev
       const baseUrl = process.env.BASE_URL || process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000';
       
-      // Auth is handled automatically by FetchInterceptor (adds Authorization header)
+      // Server-side calls use X-Organization-Id header for authentication
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (organizationId) {
+        headers['X-Organization-Id'] = organizationId;
+        console.log(`[Supervisor] Using X-Organization-Id: ${organizationId}`);
+      }
+      
       const response = await fetch(`${baseUrl}/api/booking`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers,
         body: JSON.stringify({
           functionName: toolName,
           parameters: args,
@@ -465,15 +510,20 @@ interface SupervisorResult {
  * @param contextFromLastMessage - Key context from the last user message
  * @param sessionId - Session ID for tracking
  * @param customSupervisorInstructions - Optional custom instructions from DB
+ * @param organizationId - Organization ID for multi-tenancy (passed to booking API)
  * @returns Response to speak to the user
  */
 export async function callSupervisor(
   conversationHistory: ConversationMessage[],
   contextFromLastMessage: string,
   sessionId: string,
-  customSupervisorInstructions?: string
+  customSupervisorInstructions?: string,
+  organizationId?: string
 ): Promise<SupervisorResult> {
   console.log('[Supervisor] Processing request');
+  if (organizationId) {
+    console.log(`[Supervisor] Organization ID: ${organizationId}`);
+  }
 
   const toolsCalled: string[] = [];
   const toolResults: Record<string, unknown> = {}; // Track results from each tool
@@ -579,7 +629,7 @@ Based on this conversation, determine what action to take and provide a response
         toolsCalled.push(toolName);
 
         try {
-          const result = await executeSupervisorTool(toolName, args, sessionId);
+          const result = await executeSupervisorTool(toolName, args, sessionId, organizationId);
           
           // Store result for state tracking (especially PatNum from CreatePatient)
           try {

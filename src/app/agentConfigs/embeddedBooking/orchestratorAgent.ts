@@ -8,6 +8,11 @@ import {
   type AgentWorkflow,
   type BusinessRule
 } from '@/app/lib/agentConfigLoader';
+import { 
+  getOrCreateSession, 
+  updateSession, 
+  getSessionContext 
+} from '@/app/lib/sessionStateManager';
 
 // ============================================
 // DATABASE CONFIGURATION CACHE
@@ -1761,6 +1766,10 @@ export async function executeOrchestrator(
   const effectiveSessionId = sessionId || `session-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
   try {
+    // Get or create session state
+    const sessionState = getOrCreateSession(effectiveSessionId, organizationId);
+    console.log(`[Orchestrator] 📦 Session state retrieved: ${effectiveSessionId}`);
+    
     // Use provided office context or try to extract from history
     let finalOfficeContext: EmbeddedBookingOfficeContext | undefined = officeContext;
     
@@ -1855,6 +1864,12 @@ export async function executeOrchestrator(
   const staticSystemPrompt = getStaticSystemPrompt();
   const dynamicInstructions = generateOrchestratorInstructions(finalOfficeContext);
   
+  // Get session context to include in system prompt
+  const sessionContext = getSessionContext(effectiveSessionId);
+  const sessionContextMessage = sessionContext !== 'No active booking state.' 
+    ? `\n\n## CURRENT SESSION STATE\n\n${sessionContext}\n\n**IMPORTANT:** Use this session state to avoid re-asking for information you already have.`
+    : '';
+  
   const body: any = {
     model: 'gpt-4o',
     instructions: staticSystemPrompt.text,
@@ -1863,7 +1878,7 @@ export async function executeOrchestrator(
       {
         type: 'message',
         role: 'system',
-        content: dynamicInstructions || ''
+        content: (dynamicInstructions || '') + sessionContextMessage
       },
       ...extractedHistory,
       {

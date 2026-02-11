@@ -12,6 +12,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { getOrganizationIdFromPhone } from '@/app/lib/callHelpers';
+import { getTwilioCredentials } from '@/app/lib/credentialLoader';
+import { getChannelConfig } from '@/app/lib/channelConfigLoader';
 
 export async function POST(req: NextRequest) {
   console.log('\n' + '='.repeat(70));
@@ -46,8 +48,45 @@ export async function POST(req: NextRequest) {
     
     console.log(`[Twilio Call] 🏢 Organization: ${organizationId}`);
 
-    // Get WebSocket URL from environment
-    const baseWsUrl = process.env.TWILIO_WEBSOCKET_URL || 'wss://localhost:8080/twilio-media-stream';
+    // Get WebSocket URL - try database first, fall back to environment
+    // This allows per-organization Twilio configuration
+    let baseWsUrl = process.env.TWILIO_WEBSOCKET_URL || 'wss://localhost:8080/twilio-media-stream';
+    let credentialSource = 'ENV';
+    let agentMode = 'one_agent'; // Default to one-agent mode
+    
+    try {
+      const dbCredentials = await getTwilioCredentials(organizationId);
+      if (dbCredentials.websocketUrl && dbCredentials.websocketUrl.trim() !== '') {
+        baseWsUrl = dbCredentials.websocketUrl;
+        credentialSource = 'DATABASE';
+        console.log(`[Twilio Call] ✅ Loaded WebSocket URL from DATABASE for org: ${organizationId}`);
+      } else {
+        console.log(`[Twilio Call] ℹ️ No DB websocket_url, using ENV fallback`);
+      }
+    } catch (error) {
+      console.log(`[Twilio Call] ⚠️ DB credential lookup failed, using ENV fallback:`, error);
+    }
+    
+    // Check channel config for agent mode (one_agent vs two_agent)
+    try {
+      const channelConfig = await getChannelConfig(organizationId, 'twilio');
+      agentMode = channelConfig.settings?.agent_mode || 'one_agent';
+      console.log(`[Twilio Call] 🤖 Agent Mode: ${agentMode}`);
+      
+      // Route to the correct WebSocket endpoint based on mode
+      if (agentMode === 'two_agent') {
+        // Two-agent mode uses the standard endpoint (gpt-4o-mini + gpt-4o supervisor)
+        baseWsUrl = baseWsUrl.replace('/twilio-media-stream', '/twilio-media-stream-standard');
+        console.log(`[Twilio Call] 🔀 Routing to TWO-AGENT mode (standard endpoint)`);
+      } else {
+        // One-agent mode uses the default endpoint (single gpt-4o-realtime)
+        console.log(`[Twilio Call] 🔀 Routing to ONE-AGENT mode (premium endpoint)`);
+      }
+    } catch (error) {
+      console.log(`[Twilio Call] ⚠️ Channel config lookup failed, using one-agent mode:`, error);
+    }
+    
+    console.log(`[Twilio Call] 🔧 Credential Source: ${credentialSource}`);
     
     // Pass organization ID and call metadata to WebSocket via URL parameters
     // This allows WebSocket handler to:

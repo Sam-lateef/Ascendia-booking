@@ -206,3 +206,25 @@ input::-moz-placeholder {
     @apply bg-background text-foreground;
   }
 }
+
+/* DNA Scene Styles */
+.dna-scene {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+}
+
+.dna-scene canvas {
+  display: block !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+}

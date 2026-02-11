@@ -45,6 +45,7 @@ interface GoogleCalendarEvent {
 interface FreeBusyRequest {
   timeMin: string;
   timeMax: string;
+  timeZone?: string;
   items: Array<{ id: string }>;
 }
 
@@ -193,6 +194,8 @@ export class GoogleCalendarService {
 
   /**
    * List events in a calendar
+   * @param options.pageToken - For pagination, pass the token from previous response
+   * @returns events array; if more pages exist, (result as any).nextPageToken is set
    */
   async listEvents(
     calendarId: string = 'primary',
@@ -203,8 +206,9 @@ export class GoogleCalendarService {
       singleEvents?: boolean;
       orderBy?: 'startTime' | 'updated';
       q?: string;
+      pageToken?: string;
     } = {}
-  ): Promise<GoogleCalendarEvent[]> {
+  ): Promise<GoogleCalendarEvent[] & { nextPageToken?: string }> {
     const params = new URLSearchParams();
     
     if (options.timeMin) params.set('timeMin', options.timeMin);
@@ -213,12 +217,15 @@ export class GoogleCalendarService {
     if (options.singleEvents !== undefined) params.set('singleEvents', String(options.singleEvents));
     if (options.orderBy) params.set('orderBy', options.orderBy);
     if (options.q) params.set('q', options.q);
+    if (options.pageToken) params.set('pageToken', options.pageToken);
 
     const queryString = params.toString();
     const endpoint = `/calendars/${encodeURIComponent(calendarId)}/events${queryString ? '?' + queryString : ''}`;
     
-    const result = await this.request<{ items: GoogleCalendarEvent[] }>(endpoint);
-    return result.items || [];
+    const result = await this.request<{ items: GoogleCalendarEvent[]; nextPageToken?: string }>(endpoint);
+    const items = result.items || [];
+    (items as any).nextPageToken = result.nextPageToken;
+    return items as GoogleCalendarEvent[] & { nextPageToken?: string };
   }
 
   /**

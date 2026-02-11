@@ -67,7 +67,8 @@ export async function GET(request: NextRequest) {
           plan,
           status,
           logo_url,
-          primary_color
+          primary_color,
+          is_system_org
         )
       `)
       .eq('user_id', userRecord.id)
@@ -103,6 +104,7 @@ export async function GET(request: NextRequest) {
         plan: m.organizations.plan,
         logo_url: m.organizations.logo_url,
         primary_color: m.organizations.primary_color,
+        is_system_org: !!m.organizations.is_system_org,
       }));
     
     console.log('[/api/user/organizations] Returning organizations:', organizations.length);

@@ -1160,9 +1160,10 @@ export async function getConversationsFromSupabase(date: string, organizationId?
         .filter(Boolean)
         .join(' ') || 'Unknown';
       
-      // Determine outcome
+      // Determine outcome - check both stage and call_status
       let outcome: 'completed' | 'in_progress' | 'abandoned' = 'in_progress';
-      if (conv.stage === 'completed') {
+      const callStatus = conv.call_status;
+      if (conv.stage === 'completed' || callStatus === 'ended' || callStatus === 'completed') {
         outcome = 'completed';
       } else if (messages && messages.length > 0) {
         const lastMsg = messages[messages.length - 1];
@@ -1287,8 +1288,10 @@ export async function getAllConversationsFromSupabase(organizationId?: string): 
         .filter(Boolean)
         .join(' ') || 'Unknown';
       
+      // Determine outcome - check both stage and call_status
       let outcome: 'completed' | 'in_progress' | 'abandoned' = 'in_progress';
-      if (conv.stage === 'completed') {
+      const callStatus = conv.call_status;
+      if (conv.stage === 'completed' || callStatus === 'ended' || callStatus === 'completed') {
         outcome = 'completed';
       } else if (messages && messages.length > 0) {
         const lastMsg = messages[messages.length - 1];

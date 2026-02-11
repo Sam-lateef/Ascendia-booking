@@ -13,6 +13,8 @@ export interface RequestContext {
   organizationId: string;
   role: string;
   permissions: Record<string, Record<string, boolean>>;
+  /** True when current org is the system org (platform admin org) */
+  isSystemOrg: boolean;
 }
 
 /**
@@ -115,7 +117,8 @@ export async function getCurrentOrganization(request: NextRequest): Promise<Requ
         id,
         name,
         slug,
-        status
+        status,
+        is_system_org
       )
     `)
     .eq('user_id', userRecord.id)
@@ -128,11 +131,11 @@ export async function getCurrentOrganization(request: NextRequest): Promise<Requ
   }
   
   // Check if organization is active
-  const org = membership.organization as any;
+  const org = membership.organization as { id: string; name: string; slug: string; status: string; is_system_org?: boolean };
   if (org.status !== 'active') {
     throw new Error('Organization is not active');
   }
-  
+
   return {
     user: {
       id: authUser.id,
@@ -141,6 +144,7 @@ export async function getCurrentOrganization(request: NextRequest): Promise<Requ
     organizationId: orgId,
     role: membership.role,
     permissions: membership.permissions || {},
+    isSystemOrg: !!org.is_system_org,
   };
 }
 

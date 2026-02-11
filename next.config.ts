@@ -26,15 +26,6 @@ const nextConfig: NextConfig = {
     }
     return config;
   },
-  async redirects() {
-    return [
-     {
-       source: '/',
-        destination: '/admin/booking',
-        permanent: false,
-      },
-     ];
-   },
 };
 
 export default nextConfig;

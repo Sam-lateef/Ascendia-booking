@@ -46,9 +46,9 @@ export async function getCredentials(
 
   try {
     const supabase = getSupabaseAdmin();
-    
-    // Get default credential for this org and type
-    const { data, error } = await supabase
+
+    // Try org credential first
+    let { data, error } = await supabase
       .from('api_credentials')
       .select('credentials')
       .eq('organization_id', organizationId)
@@ -56,6 +56,21 @@ export async function getCredentials(
       .eq('is_active', true)
       .eq('is_default', true)
       .maybeSingle();
+
+    // Fall back to system credential (organization_id IS NULL)
+    if ((error || !data?.credentials) && !['google_calendar'].includes(credentialType)) {
+      const { data: systemData } = await supabase
+        .from('api_credentials')
+        .select('credentials')
+        .is('organization_id', null)
+        .eq('credential_type', credentialType)
+        .eq('is_active', true)
+        .maybeSingle();
+      if (systemData?.credentials) {
+        data = systemData;
+        error = null;
+      }
+    }
 
     if (!error && data?.credentials) {
       console.log(`[Credentials] ✅ Loaded ${credentialType} from database for org ${organizationId}`);
@@ -216,6 +231,7 @@ export async function getOpenDentalCredentials(organizationId: string): Promise<
 
 /**
  * Get Google Calendar credentials (convenience function)
+ * Merges system-level (client_id, client_secret) with org-level (refresh_token, calendar_id)
  */
 export async function getGoogleCalendarCredentials(organizationId: string): Promise<{
   clientId: string;
@@ -223,13 +239,49 @@ export async function getGoogleCalendarCredentials(organizationId: string): Prom
   refreshToken: string;
   calendarId: string;
 }> {
-  const credentials = await getCredentials(organizationId, 'google_calendar');
+  const supabase = getSupabaseAdmin();
+
+  // System-level: client_id, client_secret (shared OAuth app)
+  const { data: systemCred } = await supabase
+    .from('api_credentials')
+    .select('credentials')
+    .is('organization_id', null)
+    .eq('credential_type', 'google_calendar')
+    .eq('is_active', true)
+    .maybeSingle();
+
+  // Org-level: refresh_token, calendar_id (per-org OAuth connection)
+  const { data: orgCred } = await supabase
+    .from('api_credentials')
+    .select('credentials')
+    .eq('organization_id', organizationId)
+    .eq('credential_type', 'google_calendar')
+    .eq('is_active', true)
+    .eq('is_default', true)
+    .maybeSingle();
+
+  const system = (systemCred?.credentials as Record<string, string>) || {};
+  const org = (orgCred?.credentials as Record<string, string>) || {};
+
   return {
-    clientId: credentials.client_id || '',
-    clientSecret: credentials.client_secret || '',
-    refreshToken: credentials.refresh_token || '',
-    calendarId: credentials.calendar_id || 'primary',
+    clientId: system.client_id || org.client_id || process.env.GOOGLE_CLIENT_ID || '',
+    clientSecret: system.client_secret || org.client_secret || process.env.GOOGLE_CLIENT_SECRET || '',
+    refreshToken: org.refresh_token || process.env.GOOGLE_REFRESH_TOKEN || '',
+    calendarId: org.calendar_id || process.env.GOOGLE_CALENDAR_ID || 'primary',
   };
+}
+
+/**
+ * Check if Google Calendar is configured and has valid credentials for an organization
+ * Used by GetAvailableSlots and SyncManager to determine if Google integration is active
+ */
+export async function isGoogleCalendarConfigured(organizationId: string): Promise<boolean> {
+  try {
+    const credentials = await getGoogleCalendarCredentials(organizationId);
+    return !!(credentials.clientId && credentials.clientSecret && credentials.refreshToken);
+  } catch {
+    return false;
+  }
 }
 
 /**

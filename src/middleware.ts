@@ -13,22 +13,6 @@ import { createClient } from '@supabase/supabase-js';
 export async function middleware(request: NextRequest) {
   const res = NextResponse.next();
   
-  // If accessing root path, redirect based on authentication
-  if (request.nextUrl.pathname === '/') {
-    // Check if user has a session (check for Supabase auth cookie)
-    const hasSession = request.cookies.get('sb-access-token') || 
-                       request.cookies.get('supabase-auth-token') ||
-                       request.cookies.has('currentOrgId');
-    
-    if (hasSession) {
-      // Logged in - go to admin dashboard
-      return NextResponse.redirect(new URL('/admin/booking', request.url));
-    } else {
-      // Not logged in - go to login page
-      return NextResponse.redirect(new URL('/login', request.url));
-    }
-  }
-  
   // Get Supabase credentials
   const supabaseUrl = getSupabaseUrl();
   const supabaseKey = getSupabaseAnonKey();
@@ -66,7 +50,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/',
     '/admin/:path*',
     '/api/admin/:path*',
   ],

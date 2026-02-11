@@ -6,6 +6,8 @@
 import { db as defaultDb } from '@/app/lib/db';
 import { openDentalConfig } from '@/app/agentConfigs/openDental/config';
 import type { SyncContext } from '@/app/lib/integrations/SyncManager';
+import { isGoogleCalendarConfigured } from '@/app/lib/credentialLoader';
+import { GoogleCalendarService } from '@/app/lib/integrations/GoogleCalendarService';
 
 /**
  * Get appointments with filters
@@ -238,6 +240,83 @@ export async function GetAvailableSlots(parameters: Record<string, any>, db: any
   // Generate available slots
   const availableSlots: any[] = [];
   
+  // Google Calendar: fetch busy times when configured (excludes slots busy in Google)
+  const googleBusySlotKeys = new Set<string>();
+  if (organizationId) {
+    try {
+      const googleConfigured = await isGoogleCalendarConfigured(organizationId);
+      if (googleConfigured) {
+        const calendarService = new GoogleCalendarService(organizationId);
+        const { getGoogleCalendarCredentials } = await import('@/app/lib/credentialLoader');
+        const { getSupabaseAdmin } = await import('@/app/lib/supabaseClient');
+        const creds = await getGoogleCalendarCredentials(organizationId);
+        const calendarId = creds.calendarId || 'primary';
+
+        // Get org timezone so we can correctly interpret Google Calendar busy times
+        const supabaseForTz = getSupabaseAdmin();
+        const { data: orgTzData } = await supabaseForTz
+          .from('organizations')
+          .select('timezone')
+          .eq('id', organizationId)
+          .single();
+        const orgTimezone = orgTzData?.timezone || 'America/New_York';
+
+        // Send timezone-aware request to Google freeBusy API
+        const timeMin = `${dateStart}T00:00:00`;
+        const timeMax = `${dateEnd}T23:59:59`;
+        const freeBusy = await calendarService.getFreeBusy({
+          timeMin,
+          timeMax,
+          timeZone: orgTimezone,
+          items: [{ id: calendarId }],
+        });
+        const busyTimes = freeBusy.calendars?.[calendarId]?.busy || [];
+
+        // Helper: convert a UTC Date to org's local time components
+        // Google freeBusy returns UTC times, but our slot keys are in org local time
+        const toLocalComponents = (utcDate: Date): { y: string; m: string; d: string; h: number; min: number } => {
+          const formatter = new Intl.DateTimeFormat('en-US', {
+            timeZone: orgTimezone,
+            year: 'numeric', month: '2-digit', day: '2-digit',
+            hour: '2-digit', minute: '2-digit', hour12: false,
+          });
+          const parts = formatter.formatToParts(utcDate);
+          const get = (type: string): string => parts.find(p => p.type === type)?.value || '0';
+          // Intl month/day are already zero-padded with '2-digit', year is 4-digit
+          // Note: Intl uses MM/DD/YYYY order for en-US, but formatToParts gives named parts
+          return {
+            y: get('year'),
+            m: get('month'),
+            d: get('day'),
+            h: parseInt(get('hour'), 10),
+            min: parseInt(get('minute'), 10),
+          };
+        };
+
+        busyTimes.forEach((b: { start: string; end: string }) => {
+          const busyStart = new Date(b.start);
+          const busyEnd = new Date(b.end);
+
+          // Round busyStart down to nearest 30-min boundary in org local time
+          const startLocal = toLocalComponents(busyStart);
+          const roundedMin = Math.floor(startLocal.min / 30) * 30;
+          // Rebuild a Date representing the rounded slot in org local time
+          // We iterate in 30-min increments until we pass busyEnd
+          let slotMs = busyStart.getTime() - ((startLocal.min - roundedMin) * 60000);
+          while (slotMs < busyEnd.getTime()) {
+            const lc = toLocalComponents(new Date(slotMs));
+            const key = `${lc.y}-${lc.m}-${lc.d} ${String(lc.h).padStart(2, '0')}:${String(lc.min).padStart(2, '0')}:00`;
+            googleBusySlotKeys.add(key);
+            slotMs += 30 * 60000;
+          }
+        });
+        console.log(`[GetAvailableSlots] Google Calendar: ${googleBusySlotKeys.size} busy slot keys excluded (tz: ${orgTimezone})`);
+      }
+    } catch (err) {
+      console.warn('[GetAvailableSlots] Google free/busy fetch failed, using local only:', err);
+    }
+  }
+
   // Build booked times per provider/operatory combo
   (allAppointments || []).forEach((apt: any) => {
     // Skip if no datetime
@@ -342,8 +421,10 @@ export async function GetAvailableSlots(parameters: Record<string, any>, db: any
           
           const slotKey = `${slotStartDateStr} ${slotStartTimeStr}`;
           
-          // Check if slot is not booked for this provider/operatory
-          if (!bookedTimes.has(slotKey)) {
+          // Check if slot is not booked (local) and not busy in Google Calendar
+          const isLocallyBooked = bookedTimes.has(slotKey);
+          const isGoogleBusy = googleBusySlotKeys.has(slotKey);
+          if (!isLocallyBooked && !isGoogleBusy) {
             // Get provider name from schedule if available, otherwise use a default
             const providerName = schedule.provider_name || schedule.providers?.name || `Dr. Provider ${scheduleProvId}`;
             
@@ -356,7 +437,8 @@ export async function GetAvailableSlots(parameters: Record<string, any>, db: any
               ProviderName: providerName
             });
           } else {
-            console.log(`[GetAvailableSlots] Slot ${slotKey} is booked for Provider ${scheduleProvId}, Operatory ${scheduleOpId} - excluding`);
+            const reason = isGoogleBusy ? 'Google Calendar busy' : 'locally booked';
+            console.log(`[GetAvailableSlots] Slot ${slotKey} excluded (${reason}) for Provider ${scheduleProvId}, Operatory ${scheduleOpId}`);
           }
         }
         

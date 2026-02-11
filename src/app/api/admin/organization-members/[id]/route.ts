@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from '@/app/lib/supabaseClient';
 
 /**
  * DELETE /api/admin/organization-members/[id]
+ * Only owners and admins can remove members.
  * Remove a member from the organization
  */
 export async function DELETE(
@@ -12,6 +13,14 @@ export async function DELETE(
 ) {
   try {
     const context = await getCurrentOrganization(req);
+
+    if (!['owner', 'admin'].includes(context.role)) {
+      return NextResponse.json(
+        { success: false, error: 'Only Owners and Admins can remove members' },
+        { status: 403 }
+      );
+    }
+
     const supabase = getSupabaseAdmin();
     const memberId = params.id;
 

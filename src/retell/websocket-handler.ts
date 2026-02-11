@@ -366,12 +366,13 @@ const callOrgMap = new Map<string, string>();
 const ORG_SLUG_MAP: Record<string, string> = {
   'default': '', // Will use getCachedDefaultOrganizationId()
   
-  // Your organizations (synced from database):
+  // Your organizations (synced from database) - Updated: 2026-01-31:
   'test-a': '1c26bf4a-2575-45e3-82eb-9f58c899e2e7',
   'nurai-clinic': '660d9ca6-b200-4c12-9b8d-af0a470d8b88',
   'default-org': '00000000-0000-0000-0000-000000000001',
   'admin': '9aa626ad-9a3e-4a79-a959-dda0a0b8b983',
-  'sam-lateeff': 'b445a9c7-af93-4b4a-a975-40d3f44178ec',
+  'sam-lateeff': 'b445a9c7-af93-4b4a-a975-40d3f44178ec', // Old slug (deprecated)
+  'demo': 'b445a9c7-af93-4b4a-a975-40d3f44178ec', // New demo slug
 };
 
 // WebSocket endpoint that Retell connects to

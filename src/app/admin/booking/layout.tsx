@@ -26,7 +26,7 @@ export default function AdminLayout({
   const { user, loading: authLoading, signOut } = useAuth();
   const { currentOrganization, loading: orgLoading } = useOrganization();
 
-  // Define navItems with translation keys
+  // Define navItems - Settings visible to all org members
   const navItems = [
     { href: `/admin/booking`, key: 'dashboard' },
     { href: `/admin/booking/appointments`, key: 'appointments' },
@@ -34,11 +34,9 @@ export default function AdminLayout({
     { href: `/admin/booking/schedules`, key: 'schedules' },
     { href: `/admin/booking/operatories`, key: 'operatories' },
     { href: `/admin/booking/patients`, key: 'patients' },
-    // { href: `/admin/booking/treatments`, key: 'treatments', label: 'Treatment Plans' },
-    // { href: `/admin/booking/treatments-config`, key: 'treatmentsConfig', label: 'Treatments Config' },
+    { href: `/admin/booking/messages`, key: 'messages', label: 'SMS Messages' },
     { href: `/admin/booking/calls`, key: 'calls' },
     { href: `/admin/booking/calls/statistics`, key: 'statistics' },
-    // Settings section - consolidated under /admin/settings (includes WhatsApp, Translations, Notifications, etc.)
     { href: `/admin/settings`, key: 'settings', label: '⚙️ Settings' },
   ];
 

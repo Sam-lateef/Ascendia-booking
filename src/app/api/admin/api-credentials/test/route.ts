@@ -31,13 +31,17 @@ export async function POST(req: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin();
+    const isSystemOrgOwner = context.isSystemOrg && context.role === 'owner';
+    const filter = isSystemOrgOwner
+      ? `organization_id.eq.${context.organizationId},organization_id.is.null`
+      : `organization_id.eq.${context.organizationId}`;
 
-    // Load credential
+    // Load credential (org or system - system only for system org owner)
     const { data: credential, error } = await supabase
       .from('api_credentials')
       .select('*')
       .eq('id', credentialId)
-      .eq('organization_id', context.organizationId)
+      .or(filter)
       .single();
 
     if (error || !credential) {
@@ -73,6 +77,10 @@ export async function POST(req: NextRequest) {
 
       case 'retell':
         testResult = await testRetell(credential.credentials);
+        break;
+
+      case 'google_calendar':
+        testResult = await testGoogleCalendar(context.organizationId);
         break;
 
       default:
@@ -438,6 +446,46 @@ async function testRetell(credentials: Record<string, string>): Promise<{
     return {
       success: false,
       message: error.message || 'Failed to connect to Retell AI',
+    };
+  }
+}
+
+/**
+ * Test Google Calendar credentials
+ */
+async function testGoogleCalendar(organizationId: string): Promise<{
+  success: boolean;
+  message: string;
+  details?: any;
+}> {
+  try {
+    const { GoogleCalendarService } = await import('@/app/lib/integrations/GoogleCalendarService');
+    const service = new GoogleCalendarService(organizationId);
+    const calendars = await service.listCalendars();
+
+    return {
+      success: true,
+      message: `Connected successfully. Found ${calendars.length} calendar(s).`,
+      details: {
+        calendarCount: calendars.length,
+        calendars: calendars.slice(0, 5).map((c: any) => ({
+          id: c.id,
+          summary: c.summary,
+          primary: c.primary,
+        })),
+      },
+    };
+  } catch (error: any) {
+    const msg = error?.message || String(error);
+    if (msg.includes('credentials not configured') || msg.includes('refresh_token')) {
+      return {
+        success: false,
+        message: 'Connect Google Calendar via OAuth to get a refresh token, or add one manually.',
+      };
+    }
+    return {
+      success: false,
+      message: msg || 'Failed to connect to Google Calendar',
     };
   }
 }

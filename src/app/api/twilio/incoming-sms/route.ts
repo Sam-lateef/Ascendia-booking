@@ -1,32 +1,26 @@
 /**
- * Twilio Incoming SMS Handler
- * Processes SMS messages and returns TwiML with Lexi's response
+ * Twilio Incoming SMS Handler - MULTI-TENANT VERSION
+ * 
+ * Processes SMS messages with proper multi-tenant organization routing.
+ * Mirrors the voice integration architecture:
+ * - Organization routing via phone number lookup
+ * - Database conversation records with RLS
+ * - Message logging to conversation_messages table
+ * - Proper Supabase client usage (getSupabaseWithOrg)
+ * 
+ * Based on lessons from voice integration (incoming-call/route.ts)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { callLexi } from '@/app/agentConfigs/embeddedBooking/lexiAgentTwilio';
-
-// Store conversation history per phone number
-// In production, this should use a database (Redis, etc.)
-const smsHistoryMap = new Map<string, any[]>();
-
-// Clean up old conversations after 24 hours
-const conversationTimestamps = new Map<string, number>();
-const CONVERSATION_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours
-
-// Periodic cleanup
-setInterval(() => {
-  const now = Date.now();
-  for (const [phone, timestamp] of conversationTimestamps.entries()) {
-    if (now - timestamp > CONVERSATION_TIMEOUT) {
-      smsHistoryMap.delete(phone);
-      conversationTimestamps.delete(phone);
-      console.log(`[Twilio SMS] Cleaned up old conversation for ${phone}`);
-    }
-  }
-}, 60 * 60 * 1000); // Check every hour
+import { getOrganizationIdFromPhone } from '@/app/lib/callHelpers';
+import { getSupabaseWithOrg } from '@/app/lib/supabaseClient';
 
 export async function POST(req: NextRequest) {
+  console.log('\n' + '='.repeat(70));
+  console.log('💬 [TWILIO SMS] NEW INCOMING MESSAGE');
+  console.log('='.repeat(70));
+  
   try {
     // Parse Twilio form data
     const formData = await req.formData();
@@ -35,31 +29,133 @@ export async function POST(req: NextRequest) {
     const to = formData.get('To') as string;
     const messageSid = formData.get('MessageSid') as string;
 
-    console.log(`[Twilio SMS] Message from ${from}: "${body}"`);
+    console.log(`[Twilio SMS] 📱 From: ${from}`);
+    console.log(`[Twilio SMS] 📱 To: ${to}`);
+    console.log(`[Twilio SMS] 🆔 MessageSid: ${messageSid}`);
+    console.log(`[Twilio SMS] 💬 Body: "${body}"`);
 
     if (!body || !from) {
       throw new Error('Missing required fields: Body or From');
     }
 
-    // Get or create conversation history for this phone number
-    let history = smsHistoryMap.get(from) || [];
-    const isFirstMessage = history.length === 0;
+    // CRITICAL: Look up organization from phone number
+    // This ensures SMS are routed to the correct tenant
+    const organizationId = await getOrganizationIdFromPhone(to);
+    console.log(`[Twilio SMS] 🏢 Organization: ${organizationId}`);
 
-    // Update conversation timestamp
-    conversationTimestamps.set(from, Date.now());
+    // Get Supabase client with organization context for RLS
+    const supabase = getSupabaseWithOrg(organizationId);
+
+    // Create unique session ID for SMS conversation
+    // Format: sms_<from_number>_<to_number>
+    const sessionId = `sms_${from.replace(/\D/g, '')}_${to.replace(/\D/g, '')}`;
+    
+    // Get or create conversation record
+    let { data: conversation, error: conversationError } = await supabase
+      .from('conversations')
+      .select('id, organization_id')
+      .eq('session_id', sessionId)
+      .maybeSingle();
+
+    const isFirstMessage = !conversation;
+
+    if (!conversation) {
+      // Create new conversation for this SMS thread
+      console.log(`[Twilio SMS] 📝 Creating new conversation: ${sessionId}`);
+      
+      const { data: newConversation, error: createError } = await supabase
+        .from('conversations')
+        .insert({
+          session_id: sessionId,
+          organization_id: organizationId,
+          channel: 'sms',
+          from_number: from,
+          to_number: to,
+          direction: 'inbound',
+          start_timestamp: Date.now(),
+          call_status: 'ongoing',
+          metadata: {
+            channel: 'twilio_sms',
+            last_message_sid: messageSid,
+          }
+        })
+        .select('id, organization_id')
+        .single();
+
+      if (createError || !newConversation) {
+        console.error('[Twilio SMS] ❌ Failed to create conversation:', createError);
+        throw new Error('Failed to create conversation record');
+      }
+
+      conversation = newConversation;
+      console.log(`[Twilio SMS] ✅ Created conversation: ${conversation.id}`);
+    } else {
+      // Update existing conversation timestamp
+      await supabase
+        .from('conversations')
+        .update({
+          updated_at: new Date().toISOString(),
+          metadata: {
+            channel: 'twilio_sms',
+            last_message_sid: messageSid,
+          }
+        })
+        .eq('id', conversation.id);
+    }
+
+    // Log incoming user message to database
+    await supabase
+      .from('conversation_messages')
+      .insert({
+        conversation_id: conversation.id,
+        organization_id: organizationId,
+        role: 'user',
+        content: body,
+        timestamp: new Date().toISOString(),
+        metadata: {
+          message_sid: messageSid,
+          from: from,
+          to: to,
+        }
+      });
+
+    console.log(`[Twilio SMS] 📥 Logged user message to database`);
+
+    // Load conversation history from database
+    const { data: messages, error: messagesError } = await supabase
+      .from('conversation_messages')
+      .select('role, content, timestamp')
+      .eq('conversation_id', conversation.id)
+      .order('timestamp', { ascending: true })
+      .limit(50); // Last 50 messages for context
+
+    // Convert to format expected by callLexi
+    const history = messages?.map((msg: any) => ({
+      type: 'message',
+      role: msg.role,
+      content: msg.content,
+    })) || [];
 
     // Process message with Lexi
-    console.log(`[Twilio SMS] Processing with Lexi (${isFirstMessage ? 'first' : 'continuing'} message)...`);
+    console.log(`[Twilio SMS] 🤖 Processing with Lexi (${isFirstMessage ? 'first' : 'continuing'} message)...`);
     const response = await callLexi(body, history, isFirstMessage);
 
-    // Update history with user message and assistant response
-    history.push(
-      { type: 'message', role: 'user', content: body },
-      { type: 'message', role: 'assistant', content: response }
-    );
-    smsHistoryMap.set(from, history);
+    // Log assistant response to database
+    await supabase
+      .from('conversation_messages')
+      .insert({
+        conversation_id: conversation.id,
+        organization_id: organizationId,
+        role: 'assistant',
+        content: response,
+        timestamp: new Date().toISOString(),
+        metadata: {
+          channel: 'twilio_sms',
+        }
+      });
 
-    console.log(`[Twilio SMS] Response: "${response}"`);
+    console.log(`[Twilio SMS] 📤 Logged assistant response to database`);
+    console.log(`[Twilio SMS] ✅ Response: "${response}"`);
 
     // Return TwiML with response
     // Escape XML special characters in response
@@ -75,12 +171,15 @@ export async function POST(req: NextRequest) {
     <Message>${escapedResponse}</Message>
 </Response>`;
 
+    console.log('='.repeat(70) + '\n');
+
     return new NextResponse(twiml, {
       headers: { 'Content-Type': 'text/xml' },
       status: 200,
     });
   } catch (error: any) {
-    console.error('[Twilio SMS] Error:', error);
+    console.error('[Twilio SMS] ❌ Error:', error);
+    console.log('='.repeat(70) + '\n');
     
     // Return error TwiML
     const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>

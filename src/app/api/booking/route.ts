@@ -30,6 +30,7 @@ import {
   mergeExtractedData,
   ConversationMessage
 } from '@/app/lib/llmExtractor';
+import { updateSession } from '@/app/lib/sessionStateManager';
 // Validation removed - will use LLM-based validation layer later
 
 // Feature flag for Sonnet validation
@@ -800,6 +801,77 @@ export async function POST(req: NextRequest) {
           operatory: validatedParams.Op,
           result: result
         });
+      }
+      
+      // Update session state based on function type
+      if (sessionId) {
+        try {
+          switch (functionName) {
+            case 'GetMultiplePatients':
+            case 'GetPatient':
+              // Store patient info if single result
+              if (result && !Array.isArray(result) && result.PatNum) {
+                updateSession(sessionId, {
+                  patient: {
+                    patNum: result.PatNum,
+                    firstName: result.FName,
+                    lastName: result.LName,
+                    phone: result.WirelessPhone || result.HmPhone,
+                    email: result.Email,
+                    birthdate: result.Birthdate
+                  },
+                  workflow: { patientLookedUp: true }
+                });
+              }
+              break;
+            
+            case 'CreatePatient':
+              // Store newly created patient
+              if (result && result.PatNum) {
+                updateSession(sessionId, {
+                  patient: {
+                    patNum: result.PatNum,
+                    firstName: result.FName,
+                    lastName: result.LName,
+                    phone: result.WirelessPhone || result.HmPhone,
+                    email: result.Email,
+                    birthdate: result.Birthdate
+                  },
+                  workflow: { patientLookedUp: true }
+                });
+              }
+              break;
+            
+            case 'GetAvailableSlots':
+              // Store available slots
+              if (result && Array.isArray(result)) {
+                updateSession(sessionId, {
+                  slots: { available: result },
+                  workflow: { slotsQueried: true }
+                });
+              }
+              break;
+            
+            case 'CreateAppointment':
+              // Store created appointment
+              if (result && result.AptNum) {
+                updateSession(sessionId, {
+                  appointment: {
+                    aptNum: result.AptNum,
+                    appointmentType: validatedParams.Pattern
+                  },
+                  workflow: { 
+                    appointmentCreated: true,
+                    currentStep: 'confirmation'
+                  }
+                });
+              }
+              break;
+          }
+        } catch (error) {
+          console.warn('[Booking API] Failed to update session state:', error);
+          // Don't fail the request if session update fails
+        }
       }
       
       // Return success response

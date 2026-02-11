@@ -576,15 +576,36 @@ export async function executeLexiTool(
   switch (toolName) {
     // CONTEXT TOOLS
     case 'get_datetime': {
+      // Get current time in organization's timezone (America/New_York by default)
+      const timezone = 'America/New_York';
       const now = new Date();
-      // Return local date/time to avoid timezone confusion
-      const year = now.getFullYear();
-      const month = String(now.getMonth() + 1).padStart(2, '0');
-      const day = String(now.getDate()).padStart(2, '0');
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      const seconds = String(now.getSeconds()).padStart(2, '0');
-      const dayName = now.toLocaleDateString('en-US', { weekday: 'long' });
+      
+      // Convert to organization timezone
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        weekday: 'long'
+      });
+      
+      const parts = formatter.formatToParts(now);
+      const partsMap: Record<string, string> = {};
+      parts.forEach(({ type, value }) => {
+        partsMap[type] = value;
+      });
+      
+      const year = partsMap['year'];
+      const month = partsMap['month'];
+      const day = partsMap['day'];
+      const hours = partsMap['hour'];
+      const minutes = partsMap['minute'];
+      const seconds = partsMap['second'];
+      const dayName = partsMap['weekday'];
       
       return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} (${dayName})`;
     }

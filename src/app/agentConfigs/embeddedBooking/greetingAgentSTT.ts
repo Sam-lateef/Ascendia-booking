@@ -269,8 +269,38 @@ async function executeGreetingAgentTool(
 ): Promise<any> {
   switch (toolName) {
     case 'get_datetime': {
+      // Get current time in organization's timezone (America/New_York by default)
+      const timezone = 'America/New_York';
       const now = new Date();
-      return now.toISOString();
+      
+      // Convert to organization timezone
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+        weekday: 'long'
+      });
+      
+      const parts = formatter.formatToParts(now);
+      const partsMap: Record<string, string> = {};
+      parts.forEach(({ type, value }) => {
+        partsMap[type] = value;
+      });
+      
+      const year = partsMap['year'];
+      const month = partsMap['month'];
+      const day = partsMap['day'];
+      const hours = partsMap['hour'];
+      const minutes = partsMap['minute'];
+      const seconds = partsMap['second'];
+      const dayName = partsMap['weekday'];
+      
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} (${dayName})`;
     }
 
     case 'get_office_context': {
@@ -347,13 +377,15 @@ async function executeGreetingAgentTool(
 
 /**
  * Handle greeting agent response iterations
+ * Updated: 2026-01-31 - Fixed sessionId passing
  */
 async function handleGreetingAgentIterations(
   body: any,
   response: any,
   conversationHistory: any[],
   playOneMomentAudio?: () => Promise<void>,
-  organizationId?: string
+  organizationId?: string,
+  sessionId?: string
 ): Promise<string> {
   let currentResponse = response;
   let iterations = 0;
@@ -586,7 +618,8 @@ export async function callGreetingAgent(
       responseData,
       conversationHistory,
       playOneMomentAudio,
-      organizationId
+      organizationId,
+      sessionId
     );
 
     return finalResponse;

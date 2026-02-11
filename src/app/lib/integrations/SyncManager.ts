@@ -24,6 +24,7 @@
 import { getSupabaseAdmin } from '../supabaseClient';
 import { IntegrationExecutor, getIntegrationByProvider } from './IntegrationExecutor';
 import { GoogleCalendarService } from './GoogleCalendarService';
+import { getGoogleCalendarCredentials } from '../credentialLoader';
 
 interface SyncConfig {
   id: string;
@@ -512,6 +513,149 @@ export class SyncManager {
   }
 
   /**
+   * Sync from Google Calendar to local (pull events as appointments)
+   * Used when sync_direction is from_external or bidirectional
+   * 
+   * @param options - timeMin, timeMax (ISO strings), defaults to last 7 days to next 90 days
+   * @returns { created, updated, cancelled } counts
+   */
+  async syncFromGoogleCalendar(options?: {
+    timeMin?: string;
+    timeMax?: string;
+  }): Promise<{ created: number; updated: number; cancelled: number; error?: string }> {
+    const googleConfig = await this.getSyncConfig('google_calendar');
+    if (!googleConfig?.sync_enabled) {
+      return { created: 0, updated: 0, cancelled: 0, error: 'Google Calendar sync not enabled' };
+    }
+    if (googleConfig.sync_direction !== 'from_external' && googleConfig.sync_direction !== 'bidirectional') {
+      return { created: 0, updated: 0, cancelled: 0, error: 'Sync direction must be from_external or bidirectional' };
+    }
+
+    const credentials = await getGoogleCalendarCredentials(this.organizationId);
+    if (!credentials.clientId || !credentials.clientSecret || !credentials.refreshToken) {
+      return { created: 0, updated: 0, cancelled: 0, error: 'Google Calendar credentials not configured' };
+    }
+
+    const calendarId = credentials.calendarId || 'primary';
+    const now = new Date();
+    const timeMin = options?.timeMin || new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const timeMax = options?.timeMax || new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString();
+
+    const calendarService = new GoogleCalendarService(this.organizationId);
+    let created = 0;
+    let updated = 0;
+    let cancelled = 0;
+
+    const supabase = getSupabaseAdmin();
+
+    // Get default provider and operatory for new appointments
+    const { data: firstProvider } = await supabase
+      .from('providers')
+      .select('id')
+      .eq('organization_id', this.organizationId)
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle();
+    const { data: firstOperatory } = await supabase
+      .from('operatories')
+      .select('id')
+      .eq('organization_id', this.organizationId)
+      .eq('is_active', true)
+      .limit(1)
+      .maybeSingle();
+    const defaultProviderId = firstProvider?.id ?? null;
+    const defaultOperatoryId = firstOperatory?.id ?? null;
+
+    let nextPageToken: string | undefined;
+    do {
+      const events = await calendarService.listEvents(calendarId, {
+        timeMin,
+        timeMax,
+        maxResults: 250,
+        singleEvents: true,
+        orderBy: 'startTime',
+        pageToken: nextPageToken,
+      });
+
+      for (const gEvent of events) {
+        const eventId = gEvent.id;
+        if (!eventId) continue;
+
+        const startTime = gEvent.start?.dateTime || gEvent.start?.date;
+        const endTime = gEvent.end?.dateTime || gEvent.end?.date;
+        if (!startTime || !endTime) continue;
+
+        const startDate = new Date(startTime);
+        const endDate = new Date(endTime);
+        const durationMinutes = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
+        const appointmentDatetime = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')} ${String(startDate.getHours()).padStart(2, '0')}:${String(startDate.getMinutes()).padStart(2, '0')}:00`;
+
+        const status = gEvent.status === 'cancelled' ? 'Cancelled' : 'Scheduled';
+
+        const { data: existing } = await supabase
+          .from('appointments')
+          .select('id, status')
+          .eq('organization_id', this.organizationId)
+          .eq('google_calendar_event_id', eventId)
+          .maybeSingle();
+
+        if (existing) {
+          if (status === 'Cancelled') {
+            await supabase
+              .from('appointments')
+              .update({ status: 'Cancelled', updated_at: new Date().toISOString() })
+              .eq('id', existing.id)
+              .eq('organization_id', this.organizationId);
+            cancelled++;
+          } else {
+            await supabase
+              .from('appointments')
+              .update({
+                appointment_datetime: appointmentDatetime,
+                duration_minutes: durationMinutes,
+                notes: gEvent.summary || gEvent.description || null,
+                status: 'Scheduled',
+                updated_at: new Date().toISOString(),
+              })
+              .eq('id', existing.id)
+              .eq('organization_id', this.organizationId);
+            updated++;
+          }
+        } else if (status !== 'Cancelled') {
+          await supabase.from('appointments').insert({
+            organization_id: this.organizationId,
+            patient_id: null,
+            provider_id: defaultProviderId,
+            operatory_id: defaultOperatoryId,
+            appointment_datetime: appointmentDatetime,
+            duration_minutes: durationMinutes || 30,
+            appointment_type: 'Google Calendar',
+            notes: gEvent.summary || gEvent.description || null,
+            status: 'Scheduled',
+            google_calendar_event_id: eventId,
+          });
+          created++;
+        }
+      }
+
+      nextPageToken = (events as { nextPageToken?: string }).nextPageToken;
+    } while (nextPageToken);
+
+    if (googleConfig.id) {
+      await supabase
+        .from('integration_sync_configs')
+        .update({
+          last_sync_status: 'success',
+          last_sync_at: new Date().toISOString(),
+        })
+        .eq('id', googleConfig.id);
+    }
+
+    console.log(`[SyncManager] syncFromGoogleCalendar: created=${created}, updated=${updated}, cancelled=${cancelled}`);
+    return { created, updated, cancelled };
+  }
+
+  /**
    * Sync appointment to Google Calendar
    */
   private async syncToGoogleCalendar(
@@ -522,25 +666,20 @@ export class SyncManager {
     const { getGoogleCalendarCredentials } = await import('../credentialLoader');
     const credentials = await getGoogleCalendarCredentials(this.organizationId);
 
-    if (!credentials || !credentials.client_id || !credentials.client_secret || !credentials.refresh_token) {
+    if (!credentials || !credentials.clientId || !credentials.clientSecret || !credentials.refreshToken) {
       console.log('[SyncManager] Google Calendar credentials not configured, skipping sync');
       return;
     }
 
-    // Initialize Google Calendar service
-    const calendarService = new GoogleCalendarService({
-      clientId: credentials.client_id,
-      clientSecret: credentials.client_secret,
-      refreshToken: credentials.refresh_token,
-    });
+    // Initialize Google Calendar service (loads credentials via organizationId)
+    const calendarService = new GoogleCalendarService(this.organizationId);
+    const calendarId = credentials.calendarId || 'primary';
 
-    const calendarId = credentials.calendar_id || 'primary';
-
-    // Fetch patient name for event title
+    // Fetch patient name and org timezone
+    const supabaseSync = getSupabaseAdmin();
     let patientName = 'Appointment';
     if (appointment.patient_id) {
-      const supabase = getSupabaseAdmin();
-      const { data: patient } = await supabase
+      const { data: patient } = await supabaseSync
         .from('patients')
         .select('first_name, last_name')
         .eq('id', appointment.patient_id)
@@ -551,16 +690,30 @@ export class SyncManager {
       }
     }
 
-    // Format datetime
-    const startTime = new Date(appointment.appointment_datetime);
-    const endTime = new Date(startTime.getTime() + (appointment.duration_minutes || 30) * 60000);
+    // Get org timezone for correct Google Calendar event placement
+    const { data: orgData } = await supabaseSync
+      .from('organizations')
+      .select('timezone')
+      .eq('id', this.organizationId)
+      .single();
+    const orgTimezone = orgData?.timezone || 'America/New_York';
+
+    // appointment_datetime is stored as naive local time in org's timezone (e.g., "2026-02-12T16:00:00" = 4pm local)
+    // We must NOT use .toISOString() which appends "Z" (UTC) - instead send naive datetime + timeZone
+    const naiveDatetime = String(appointment.appointment_datetime).replace(/[Z+].*$/, '').replace(/\.\d+$/, '');
+    const durationMs = (appointment.duration_minutes || 30) * 60000;
+    const startMs = new Date(naiveDatetime).getTime();
+    const endDate = new Date(startMs + durationMs);
+    const naiveEndDatetime = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}T${String(endDate.getHours()).padStart(2, '0')}:${String(endDate.getMinutes()).padStart(2, '0')}:00`;
+
+    console.log(`[SyncManager] GCal sync: naive start=${naiveDatetime}, end=${naiveEndDatetime}, tz=${orgTimezone}`);
 
     if (operation === 'create') {
       const event = await calendarService.createEvent(calendarId, {
         summary: `Appointment: ${patientName}`,
         description: `Type: ${appointment.appointment_type || 'General'}\nNotes: ${appointment.notes || ''}`,
-        start: { dateTime: startTime.toISOString() },
-        end: { dateTime: endTime.toISOString() },
+        start: { dateTime: naiveDatetime, timeZone: orgTimezone },
+        end: { dateTime: naiveEndDatetime, timeZone: orgTimezone },
         extendedProperties: {
           private: {
             appointmentId: String(appointment.id),
@@ -584,8 +737,8 @@ export class SyncManager {
       await calendarService.updateEvent(calendarId, appointment.google_calendar_event_id, {
         summary: `Appointment: ${patientName}`,
         description: `Type: ${appointment.appointment_type || 'General'}\nNotes: ${appointment.notes || ''}`,
-        start: { dateTime: startTime.toISOString() },
-        end: { dateTime: endTime.toISOString() },
+        start: { dateTime: naiveDatetime, timeZone: orgTimezone },
+        end: { dateTime: naiveEndDatetime, timeZone: orgTimezone },
       });
     } else if (operation === 'delete' && appointment.google_calendar_event_id) {
       await calendarService.deleteEvent(calendarId, appointment.google_calendar_event_id);

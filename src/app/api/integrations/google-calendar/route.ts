@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentOrganization } from '@/app/lib/apiHelpers';
 import { GoogleCalendarService, clearGoogleTokenCache } from '@/app/lib/integrations/GoogleCalendarService';
+import { SyncManager } from '@/app/lib/integrations/SyncManager';
 
 /**
  * GET /api/integrations/google-calendar
@@ -229,6 +230,21 @@ export async function POST(request: NextRequest) {
       case 'clearCache': {
         clearGoogleTokenCache(organizationId);
         return NextResponse.json({ success: true, message: 'Cache cleared' });
+      }
+
+      case 'syncFromGoogle': {
+        const syncManager = new SyncManager(organizationId);
+        const result = await syncManager.syncFromGoogleCalendar(body.timeMin ? { timeMin: body.timeMin, timeMax: body.timeMax } : undefined);
+        if (result.error) {
+          return NextResponse.json({ success: false, error: result.error }, { status: 400 });
+        }
+        return NextResponse.json({
+          success: true,
+          message: 'Sync complete',
+          created: result.created,
+          updated: result.updated,
+          cancelled: result.cancelled,
+        });
       }
 
       default:
